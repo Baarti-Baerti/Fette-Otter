@@ -276,15 +276,40 @@ def remove_member_route(member_id: int):
 @app.get("/api/debug/<int:user_id>")
 def debug_user(user_id: int):
     """Debug endpoint — shows exactly what happens when fetching a user."""
+    from datetime import date, timedelta
     member = g.get_member(user_id)
     if not member:
         return jsonify({"error": "member not found"}), 404
     try:
         client = g.get_client(user_id)
         username = client.username
-        return jsonify({"status": "client_ok", "username": username, "member": member["name"]})
     except Exception as exc:
-        return jsonify({"status": "client_failed", "error": str(exc), "type": type(exc).__name__})
+        return jsonify({"step": "get_client", "error": str(exc), "type": type(exc).__name__})
+
+    today = date.today()
+    results = {"username": username, "member": member["name"], "steps": {}}
+
+    # Test each API call individually
+    try:
+        acts = g.fetch_activities_last_n_days(client, 7)
+        results["steps"]["activities"] = f"OK — {len(acts)} activities"
+    except Exception as exc:
+        results["steps"]["activities"] = f"FAILED: {type(exc).__name__}: {exc}"
+
+    try:
+        start = today - timedelta(days=6)
+        sums = g.fetch_daily_summaries(client, start, 7)
+        results["steps"]["summaries"] = f"OK — {len(sums)} days"
+    except Exception as exc:
+        results["steps"]["summaries"] = f"FAILED: {type(exc).__name__}: {exc}"
+
+    try:
+        bmi = g.fetch_latest_bmi(client)
+        results["steps"]["bmi"] = f"OK — {bmi}"
+    except Exception as exc:
+        results["steps"]["bmi"] = f"FAILED: {type(exc).__name__}: {exc}"
+
+    return jsonify(results)
 
 
 @app.get("/api/team")
