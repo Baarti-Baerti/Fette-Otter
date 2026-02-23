@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: squad-stats-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free                      # upgrade to starter for persistent disk
+    envVars:
+      - key: GOOGLE_CLIENT_ID
+        sync: false                 # set in Render dashboard
+      - key: GARTH_SQUAD_HOME
+        value: /data/garth_squad
+      - key: PORT
+        value: "8080"
+    disk:
+      name: garth-tokens
+      mountPath: /data/garth_squad
+      sizeGB: 1
+    healthCheckPath: /api/health
