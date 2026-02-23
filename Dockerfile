@@ -22,10 +22,4 @@ USER appuser
 
 EXPOSE 8080
 
-CMD gunicorn \
-    --bind 0.0.0.0:${PORT} \
-    --workers 4 \
-    --timeout 120 \
-    --access-logfile - \
-    --error-logfile - \
-    "wsgi:app"
+CMD python api/server.py
