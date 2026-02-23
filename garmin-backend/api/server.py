@@ -44,7 +44,21 @@ if _tokens_b64:
         print(f"⚠️  Token bootstrap failed: {_e}", flush=True)
 
 app = Flask(__name__)
+app.url_map.strict_slashes = False   # /api/members/join/ works same as /api/members/join
 CORS(app, origins="*")
+
+# Always return JSON for errors, never HTML
+@app.errorhandler(404)
+def not_found(e):
+    return jsonify({"error": "Not found"}), 404
+
+@app.errorhandler(405)
+def method_not_allowed(e):
+    return jsonify({"error": "Method not allowed"}), 405
+
+@app.errorhandler(500)
+def internal_error(e):
+    return jsonify({"error": "Internal server error", "detail": str(e)}), 500
 
 GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID", "")
 RANGE_DAYS = {"today": 1, "1w": 7, "4w": 28}
@@ -134,6 +148,11 @@ def _stub(member: dict[str, Any]) -> dict[str, Any]:
         "monthly":[dict(z) for _ in range(12)],
         "_stub": True,
     }
+
+
+@app.get("/")
+def root():
+    return jsonify({"name": "Brew Crew API", "status": "ok"})
 
 
 @app.get("/api/health")
