@@ -15,9 +15,13 @@ COPY garmin-backend/ .
 ENV GARTH_SQUAD_HOME=/data/garth_squad
 ENV PORT=8080
 
-RUN mkdir -p /data/garth_squad && chmod 700 /data/garth_squad
+# Create data dir, create user, fix all permissions before switching user
+RUN useradd -m appuser \
+    && mkdir -p /data/garth_squad \
+    && chown -R appuser:appuser /app /data \
+    && chmod -R 755 /data \
+    && chmod 700 /data/garth_squad
 
-RUN useradd -m appuser && chown -R appuser:appuser /app /data
 USER appuser
 
 EXPOSE 8080
