@@ -171,10 +171,21 @@ def join():
     # Check if Garmin email already registered
     existing = next((m for m in g.all_members() if m.get("garmin_email") == garmin_email), None)
     if existing:
-        safe = {k: existing.get(k) for k in
-                ("id","name","role","emoji","color","bg","garminDevice",
-                 "types","picture","google_email","joined_at")}
-        return jsonify({"member": safe, "message": "Already in the squad!", "rejoined": True}), 200
+        # If already authenticated, just return their profile
+        if g.is_authenticated(existing["id"]):
+            safe = {k: existing.get(k) for k in
+                    ("id","name","role","emoji","color","bg","garminDevice",
+                     "types","picture","google_email","joined_at")}
+            return jsonify({"member": safe, "message": "Already in the squad!", "rejoined": True}), 200
+        # Member exists but token is missing — re-authenticate
+        try:
+            g.login_and_save(existing["id"], garmin_email, garmin_password)
+            safe = {k: existing.get(k) for k in
+                    ("id","name","role","emoji","color","bg","garminDevice",
+                     "types","picture","google_email","joined_at")}
+            return jsonify({"member": safe, "message": "Welcome back! 🎉", "rejoined": True}), 200
+        except Exception as exc:
+            return jsonify({"error": f"Garmin Connect login failed — check your email and password. ({exc})"}), 422
 
     # Create member record
     try:
