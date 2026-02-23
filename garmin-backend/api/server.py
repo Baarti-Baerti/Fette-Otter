@@ -157,7 +157,19 @@ def root():
 
 @app.get("/api/health")
 def health():
-    return jsonify({"status": "ok", "team_size": len(g.all_members())})
+    import os
+    from pathlib import Path
+    squad_home = Path(os.environ.get("GARTH_SQUAD_HOME", Path.home() / ".garth_squad"))
+    members = g.all_members()
+    debug = {
+        "status": "ok",
+        "team_size": len(members),
+        "squad_home": str(squad_home),
+        "squad_home_exists": squad_home.exists(),
+        "squad_home_contents": [str(p) for p in squad_home.iterdir()] if squad_home.exists() else [],
+        "members": [{"id": m["id"], "name": m["name"], "authenticated": g.is_authenticated(m["id"])} for m in members],
+    }
+    return jsonify(debug)
 
 
 @app.get("/api/status")
