@@ -980,12 +980,12 @@
     <div class="modal-header">
       <span class="modal-header-icon">🏅</span>
       <h2>Join Brew Crew</h2>
-      <p>Sign in with Google, then connect your Garmin</p>
+      <p>Enter your name and connect your Garmin</p>
       <button class="modal-close" onclick="closeJoinModal()">✕</button>
     </div>
     <div class="modal-body">
 
-      <!-- Steps indicator -->
+      <!-- Steps indicator — now just 2 steps -->
       <div class="steps-indicator">
         <div class="step-dot active" id="stepDot1">1</div>
         <div class="step-line" id="stepLine1"></div>
@@ -997,43 +997,14 @@
       <!-- Error / info message -->
       <div class="modal-msg" id="modalMsg"></div>
 
-      <!-- ── STEP 1: Google Sign-In ── -->
+      <!-- ── STEP 1: Name + Garmin credentials ── -->
       <div id="step1">
         <p style="font-size:0.85rem;color:var(--text2);font-weight:600;margin-bottom:18px;line-height:1.5">
-          Sign in with your Google account so we can identify you on the dashboard.
-          No data is shared — this is just for your profile name and photo.
+          Enter your name and Garmin Connect credentials to join the leaderboard.
         </p>
-        <!-- Google Sign-In button rendered here by GSI -->
-        <div id="googleSignInBtn" style="display:flex;justify-content:center;margin-bottom:12px"></div>
-        <!-- Fallback manual button (also works) -->
-        <button class="btn-google" id="manualGoogleBtn" onclick="triggerGoogleSignIn()">
-          <svg viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/><path fill="none" d="M0 0h48v48H0z"/></svg>
-          Continue with Google
-        </button>
-        <p style="font-size:0.68rem;color:var(--muted);text-align:center;margin-top:10px;font-weight:600">
-          Your Google account is only used for your display name and photo
-        </p>
-      </div>
-
-      <!-- ── STEP 2: Garmin credentials ── -->
-      <div id="step2" style="display:none">
-        <!-- Shows verified Google account -->
-        <div class="google-user-card" id="googleUserCard">
-          <img id="googleAvatar" src="" alt="">
-          <div>
-            <div class="guc-name" id="googleName"></div>
-            <div class="guc-email" id="googleEmailDisplay"></div>
-          </div>
-          <span class="guc-check">✅</span>
-        </div>
-
-        <p style="font-size:0.82rem;color:var(--text2);font-weight:600;margin-bottom:16px;line-height:1.5">
-          Now connect your Garmin Connect account to pull in your fitness data.
-        </p>
-
         <div class="field">
-          <label>Your role / team (optional)</label>
-          <input type="text" id="roleInput" placeholder="e.g. Engineering, Design, Marketing…">
+          <label>Your name</label>
+          <input type="text" id="nameInput" placeholder="e.g. Alex Chen">
         </div>
         <div class="field">
           <label>Garmin Connect email</label>
@@ -1044,17 +1015,18 @@
           <input type="password" id="garminPasswordInput" placeholder="Your Garmin password">
           <div class="field-hint">🔒 Sent directly to Garmin — never stored on our servers</div>
         </div>
-
         <button class="btn-primary" id="joinBtn" onclick="submitJoin()">
           <span id="joinBtnText">Join Brew Crew 🎉</span>
         </button>
-        <button onclick="backToStep1()" style="width:100%;margin-top:8px;padding:10px;border:none;background:none;color:var(--muted);font-family:Nunito,sans-serif;font-weight:700;font-size:0.78rem;cursor:pointer">← Back</button>
       </div>
+
+      <!-- ── STEP 2: unused (kept for step indicator) ── -->
+      <div id="step2" style="display:none"></div>
 
       <!-- ── STEP 3: Success ── -->
       <div class="success-screen" id="step3">
         <span class="success-emoji">🎉</span>
-        <h3 id="successTitle">You're in the squad!</h3>
+        <h3 id="successTitle">You're in Brew Crew!</h3>
         <p id="successMsg">Your Garmin data is syncing…</p>
         <div class="new-member-preview" id="newMemberPreview"></div>
         <button class="btn-primary" onclick="closeJoinModal()">View Dashboard</button>
@@ -1189,21 +1161,19 @@ async function loadData(period = '1w') {
   showBanner('⏳ Connecting to Garmin backend…', 'info');
   try {
     const res = await fetch(`${API_BASE}/api/team?range=${period}`, {
-      signal: AbortSignal.timeout(8000),
+      signal: AbortSignal.timeout(20000),
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const team = await res.json();
     if (!Array.isArray(team)) throw new Error('Invalid response');
 
     users = team.length ? team.map((u, i) => normaliseUser(u, i)) : MOCK_USERS.map((u, i) => normaliseUser(u, i));
-    // Fill mock monthly only for stub users (backend returns empty monthly for unauthenticated)
     users.forEach(u => { if (!u.monthly || u.monthly.length < 12) u.monthly = genMonthly(u); });
 
     selUser = users[0];
     selMoUser = users[0];
     usingLiveData = true;
 
-    // Count how many are live vs stub
     const liveCount = team.filter(u => !u._stub).length;
     if (team.length === 0) {
       showBanner('✅ Backend connected · No members yet — click "Join Brew Crew" to add yourself!', 'live');
@@ -1215,13 +1185,23 @@ async function loadData(period = '1w') {
     renderAll();
 
   } catch(e) {
-    console.warn('Backend unreachable, using mock data:', e.message);
+    console.error('Backend error:', e.message, e);
+    // Try hitting /api/health to distinguish CORS vs offline
+    try {
+      const h = await fetch(`${API_BASE}/api/health`, { signal: AbortSignal.timeout(10000) });
+      if (h.ok) {
+        showBanner('⚠️ Backend reachable but /api/team failed — check Railway logs', 'warning');
+      } else {
+        showBanner(`⚠️ Backend error ${h.status} — check Railway logs`, 'warning');
+      }
+    } catch(e2) {
+      showBanner(`⚠️ Cannot reach backend (${e.message}) — check CORS or Railway URL`, 'warning');
+    }
     users = MOCK_USERS.map((u, i) => normaliseUser(u, i));
     users.forEach(u => { u.monthly = genMonthly(u); });
     selUser = users[0];
     selMoUser = users[0];
     usingLiveData = false;
-    showBanner('⚠️ Backend offline — showing demo data. Run: python api/server.py', 'warning');
     renderAll();
   }
   if (users[0] && users[0].monthly.length) {
@@ -1666,31 +1646,23 @@ function saveSession(member) {
 
 function updateHeaderChip(member) {
   if (!member) return;
-  const chip = document.getElementById('currentUserChip');
-  const wrap = document.getElementById('chipAvatarWrap');
+  const chip   = document.getElementById('currentUserChip');
+  const wrap   = document.getElementById('chipAvatarWrap');
   const nameEl = document.getElementById('chipName');
-  if (member.picture) {
-    wrap.innerHTML = `<img class="chip-avatar" src="${member.picture}" alt="">`;
-  } else {
-    wrap.innerHTML = `<span class="chip-avatar-emoji" style="background:${member.bg}">${member.emoji}</span>`;
-  }
+  wrap.innerHTML = `<span class="chip-avatar-emoji" style="background:${member.bg}">${member.emoji}</span>`;
   nameEl.textContent = member.name.split(' ')[0];
   chip.classList.add('visible');
 }
 
 // ── Open / close modal ────────────────────────────────────────────
 function openJoinModal() {
-  // If already signed in, skip straight to step 2
-  if (googleProfile && !currentMember) {
-    goToStep(2);
-  } else if (currentMember) {
+  if (currentMember) {
     goToStep(3);
     showSuccessScreen(currentMember, true);
   } else {
     goToStep(1);
   }
   document.getElementById('joinModal').classList.add('open');
-  initGoogleSignIn();
 }
 
 function closeJoinModal() {
@@ -1698,9 +1670,7 @@ function closeJoinModal() {
   clearModalMsg();
 }
 
-function openMyProfile() {
-  openJoinModal();
-}
+function openMyProfile() { openJoinModal(); }
 
 // Close on overlay click
 document.getElementById('joinModal').addEventListener('click', function(e) {
@@ -1711,109 +1681,28 @@ document.getElementById('joinModal').addEventListener('click', function(e) {
 function goToStep(n) {
   modalStep = n;
   document.getElementById('step1').style.display = n === 1 ? 'block' : 'none';
-  document.getElementById('step2').style.display = n === 2 ? 'block' : 'none';
+  document.getElementById('step2').style.display = 'none';
   document.getElementById('step3').style.display = n === 3 ? 'block' : 'none';
-
-  // Update step dots
   for (let i = 1; i <= 3; i++) {
     const dot  = document.getElementById(`stepDot${i}`);
     const line = document.getElementById(`stepLine${i}`);
     dot.classList.remove('active','done');
-    if (i < n)       dot.classList.add('done');
+    if (i < n)        dot.classList.add('done');
     else if (i === n) dot.classList.add('active');
     if (line) line.classList.toggle('done', i < n);
   }
 }
 
-function backToStep1() {
-  googleIdToken = null;
-  googleProfile = null;
-  clearModalMsg();
-  goToStep(1);
-}
-
-// ── Google Sign-In (GSI) ──────────────────────────────────────────
-function initGoogleSignIn() {
-  if (!window.google || !GOOGLE_CLIENT_ID || GOOGLE_CLIENT_ID.startsWith('YOUR_')) {
-    // Show manual button only — GSI library not loaded or not configured
-    document.getElementById('googleSignInBtn').style.display = 'none';
-    return;
-  }
-  google.accounts.id.initialize({
-    client_id: GOOGLE_CLIENT_ID,
-    callback:  handleGoogleCredential,
-    auto_select: false,
-    cancel_on_tap_outside: false,
-  });
-  google.accounts.id.renderButton(
-    document.getElementById('googleSignInBtn'),
-    { theme:'outline', size:'large', shape:'pill', width: 360, text:'continue_with' }
-  );
-}
-
-function triggerGoogleSignIn() {
-  if (!window.google || !GOOGLE_CLIENT_ID || GOOGLE_CLIENT_ID.startsWith('YOUR_')) {
-    // Dev/demo mode: simulate a Google sign-in with a fake profile
-    handleGoogleCredential({ credential: '__DEMO__' });
-    return;
-  }
-  google.accounts.id.prompt();
-}
-
-function handleGoogleCredential(response) {
-  if (response.credential === '__DEMO__') {
-    // Demo mode — use a fake profile so devs can test the UI without a real Client ID
-    googleIdToken = '__DEMO__';
-    googleProfile = {
-      sub:     'demo_sub_' + Date.now(),
-      email:   'demo@gmail.com',
-      name:    'Demo User',
-      picture: '',
-    };
-  } else {
-    googleIdToken = response.credential;
-    // Decode the JWT payload (no verification here — server verifies)
-    try {
-      const parts = googleIdToken.split('.');
-      const payload = JSON.parse(atob(parts[1].replace(/-/g,'+').replace(/_/g,'/')));
-      googleProfile = {
-        sub:     payload.sub,
-        email:   payload.email,
-        name:    payload.name || payload.email,
-        picture: payload.picture || '',
-      };
-    } catch(e) {
-      showModalMsg('Could not decode Google token — please try again.', 'error');
-      return;
-    }
-  }
-
-  // Populate step 2
-  document.getElementById('googleName').textContent        = googleProfile.name;
-  document.getElementById('googleEmailDisplay').textContent= googleProfile.email;
-  const avatarEl = document.getElementById('googleAvatar');
-  if (googleProfile.picture) {
-    avatarEl.src   = googleProfile.picture;
-    avatarEl.style.display = 'block';
-  } else {
-    avatarEl.style.display = 'none';
-  }
-  // Pre-fill Garmin email if it looks like a non-Google address
-  const garminInput = document.getElementById('garminEmailInput');
-  if (!garminInput.value && !googleProfile.email.endsWith('@gmail.com')) {
-    garminInput.value = googleProfile.email;
-  }
-
-  clearModalMsg();
-  goToStep(2);
-}
-
 // ── Submit join ───────────────────────────────────────────────────
 async function submitJoin() {
+  const name           = document.getElementById('nameInput').value.trim();
   const garminEmail    = document.getElementById('garminEmailInput').value.trim();
   const garminPassword = document.getElementById('garminPasswordInput').value.trim();
-  const role           = document.getElementById('roleInput').value.trim();
 
+  if (!name) {
+    showModalMsg('Please enter your name.', 'error');
+    return;
+  }
   if (!garminEmail || !garminPassword) {
     showModalMsg('Please enter your Garmin Connect email and password.', 'error');
     return;
@@ -1827,10 +1716,9 @@ async function submitJoin() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        id_token:        googleIdToken,
+        name:            name,
         garmin_email:    garminEmail,
         garmin_password: garminPassword,
-        role:            role,
       }),
     });
 
@@ -1842,18 +1730,14 @@ async function submitJoin() {
       return;
     }
 
-    // Success!
     const member = data.member;
     saveSession(member);
-
-    // Re-fetch team data so new member appears immediately
     await loadData(document.querySelector('.week-btn.active')?.dataset?.range || '1w');
-
     showSuccessScreen(member, data.rejoined);
     goToStep(3);
 
   } catch(err) {
-    showModalMsg(`Could not reach the server. Is the backend running? (${err.message})`, 'error');
+    showModalMsg(`Could not reach the server. (${err.message})`, 'error');
   } finally {
     setJoinLoading(false);
   }
@@ -1865,21 +1749,15 @@ function showSuccessScreen(member, rejoined = false) {
   document.getElementById('successMsg').textContent =
     rejoined ? 'Your stats are already on the leaderboard.' :
                'Your Garmin data is syncing — you\'ll appear on the leaderboard shortly.';
-
   document.getElementById('newMemberPreview').innerHTML = `
-    <div class="nmp-avatar" style="background:${member.bg}">${
-      member.picture
-        ? `<img src="${member.picture}" style="width:44px;height:44px;border-radius:14px;object-fit:cover">`
-        : member.emoji
-    }</div>
+    <div class="nmp-avatar" style="background:${member.bg}">${member.emoji}</div>
     <div>
       <div class="nmp-name">${member.name}</div>
-      <div class="nmp-role">${member.role || 'Squad member'} · ${member.garminDevice || 'Garmin'}</div>
+      <div class="nmp-role">Brew Crew · ${member.garminDevice || 'Garmin'}</div>
     </div>
     <div style="margin-left:auto;font-size:.7rem;font-weight:700;color:#059669;background:#d1fae5;padding:3px 10px;border-radius:20px">
       ${rejoined ? 'Active' : 'Joined!'}
     </div>`;
-
   document.getElementById('step3').style.display = 'block';
 }
 
@@ -1889,7 +1767,7 @@ function setJoinLoading(loading) {
   btn.disabled = loading;
   text.innerHTML = loading
     ? '<div class="spinner"></div> Connecting to Garmin…'
-    : 'Join the Squad 🎉';
+    : 'Join Brew Crew 🎉';
 }
 
 function showModalMsg(msg, type = 'info') {
