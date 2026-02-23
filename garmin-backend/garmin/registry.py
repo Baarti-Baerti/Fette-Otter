@@ -1,33 +1,3 @@
-"""
-garmin/registry.py
-──────────────────
-Persistent member registry backed by a JSON file.
-
-Replaces the static config/team.py so members can be added/removed at runtime
-via the API without restarting the server.
-
-Storage: ~/.garth_squad/members.json
-Format:
-[
-  {
-    "id": 1,
-    "google_sub": "1234567890",       ← Google account subject ID
-    "google_email": "alex@gmail.com",
-    "name": "Alex Chen",
-    "picture": "https://…",           ← Google profile photo URL
-    "role": "Engineering",
-    "garmin_email": "alex@garmin.com",
-    "emoji": "🦁",
-    "color": "#7c3aed",
-    "bg": "#ede9fe",
-    "garminDevice": "Forerunner 965",
-    "types": [],
-    "joined_at": "2026-02-23T14:00:00"
-  },
-  …
-]
-"""
-
 from __future__ import annotations
 
 import json
@@ -37,12 +7,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-GARTH_SQUAD_HOME = Path(
-    os.environ.get("GARTH_SQUAD_HOME", Path.home() / ".garth_squad")
-)
-REGISTRY_FILE = GARTH_SQUAD_HOME / "members.json"
-
-# Palette assigned round-robin to new members
 PALETTE = [
     {"color": "#7c3aed", "bg": "#ede9fe", "emoji": "🦁"},
     {"color": "#db2777", "bg": "#fce7f3", "emoji": "🐯"},
@@ -55,34 +19,48 @@ PALETTE = [
     {"color": "#4f46e5", "bg": "#eef2ff", "emoji": "🦄"},
     {"color": "#0891b2", "bg": "#ecfeff", "emoji": "🐋"},
     {"color": "#16a34a", "bg": "#f0fdf4", "emoji": "🦎"},
-    {"color": "#dc2626", "bg": "#fef2f2", "emoji": "🦁"},
+    {"color": "#dc2626", "bg": "#fef2f2", "emoji": "🐆"},
 ]
 
 _lock = threading.RLock()
 
 
+def _squad_home() -> Path:
+    """Always read fresh from env — critical for containers."""
+    return Path(os.environ.get("GARTH_SQUAD_HOME", Path.home() / ".garth_squad"))
+
+
+def _registry_file() -> Path:
+    return _squad_home() / "members.json"
+
+
 def _load() -> list[dict[str, Any]]:
-    GARTH_SQUAD_HOME.mkdir(parents=True, exist_ok=True)
-    if not REGISTRY_FILE.exists():
+    _squad_home().mkdir(parents=True, exist_ok=True)
+    rf = _registry_file()
+    if not rf.exists():
         return []
     try:
-        with open(REGISTRY_FILE) as f:
+        with open(rf) as f:
             return json.load(f)
     except (json.JSONDecodeError, OSError):
         return []
 
 
 def _save(members: list[dict[str, Any]]) -> None:
-    GARTH_SQUAD_HOME.mkdir(parents=True, exist_ok=True)
-    tmp = REGISTRY_FILE.with_suffix(".tmp")
+    home = _squad_home()
+    home.mkdir(parents=True, exist_ok=True)
+    rf   = _registry_file()
+    tmp  = rf.with_suffix(".tmp")
     with open(tmp, "w") as f:
         json.dump(members, f, indent=2)
-    tmp.replace(REGISTRY_FILE)
-    os.chmod(REGISTRY_FILE, 0o600)
+    os.replace(str(tmp), str(rf))  # atomic rename
+    try:
+        os.chmod(rf, 0o644)
+    except OSError:
+        pass
 
 
 def all_members() -> list[dict[str, Any]]:
-    """Return all registered members."""
     with _lock:
         return _load()
 
@@ -105,19 +83,13 @@ def add_member(
     garmin_email: str,
     role: str = "",
 ) -> dict[str, Any]:
-    """
-    Register a new member. Raises ValueError if google_sub already exists.
-    Returns the newly created member dict.
-    """
     with _lock:
         members = _load()
-
-        # Idempotency check
         existing = next((m for m in members if m["google_sub"] == google_sub), None)
         if existing:
-            raise ValueError(f"Member with Google account already exists (id={existing['id']})")
+            raise ValueError(f"Member already exists (id={existing['id']})")
 
-        new_id = (max((m["id"] for m in members), default=0)) + 1
+        new_id  = (max((m["id"] for m in members), default=0)) + 1
         palette = PALETTE[(new_id - 1) % len(PALETTE)]
 
         member: dict[str, Any] = {
@@ -127,7 +99,7 @@ def add_member(
             "garmin_email": garmin_email,
             "name":         name,
             "picture":      picture,
-            "role":         role or google_email.split("@")[0].replace(".", " ").title(),
+            "role":         role or "Brew Crew",
             "emoji":        palette["emoji"],
             "color":        palette["color"],
             "bg":           palette["bg"],
@@ -142,7 +114,6 @@ def add_member(
 
 
 def update_member(member_id: int, updates: dict[str, Any]) -> dict[str, Any] | None:
-    """Update fields on an existing member. Returns updated member or None."""
     with _lock:
         members = _load()
         for i, m in enumerate(members):
@@ -154,7 +125,6 @@ def update_member(member_id: int, updates: dict[str, Any]) -> dict[str, Any] | N
 
 
 def remove_member(member_id: int) -> bool:
-    """Remove a member by id. Returns True if removed."""
     with _lock:
         members = _load()
         new = [m for m in members if m["id"] != member_id]
