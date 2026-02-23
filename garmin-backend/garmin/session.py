@@ -23,12 +23,6 @@ def get_client(user_id: int) -> garth.Client:
 
     client = garth.Client()
     client.load(str(tdir))
-
-    try:
-        _ = client.username
-    except GarthException as exc:
-        raise GarthException(f"Session expired for user {user_id}.") from exc
-
     return client
 
 
