@@ -159,41 +159,37 @@ def list_members():
 @app.post("/api/members/join")
 def join():
     body            = request.get_json(silent=True) or {}
-    id_token        = (body.get("id_token")        or "").strip()
+    name            = (body.get("name")            or "").strip()
     garmin_email    = (body.get("garmin_email")    or "").strip()
     garmin_password = (body.get("garmin_password") or "").strip()
-    role            = (body.get("role")            or "").strip()
 
-    if not id_token:
-        return jsonify({"error": "id_token is required"}), 400
+    if not name:
+        return jsonify({"error": "name is required"}), 400
     if not garmin_email or not garmin_password:
         return jsonify({"error": "garmin_email and garmin_password are required"}), 400
 
-    try:
-        gp = verify_google_id_token(id_token)
-    except ValueError as exc:
-        return jsonify({"error": f"Google sign-in failed: {exc}"}), 401
-
-    google_sub   = gp.get("sub", "")
-    google_email = gp.get("email", "")
-    name         = gp.get("name", google_email)
-    picture      = gp.get("picture", "")
-
-    existing = g.get_by_google_sub(google_sub)
+    # Check if Garmin email already registered
+    existing = next((m for m in g.all_members() if m.get("garmin_email") == garmin_email), None)
     if existing:
         safe = {k: existing.get(k) for k in
                 ("id","name","role","emoji","color","bg","garminDevice",
                  "types","picture","google_email","joined_at")}
         return jsonify({"member": safe, "message": "Already in the squad!", "rejoined": True}), 200
 
+    # Create member record
     try:
         new_member = g.add_member(
-            google_sub=google_sub, google_email=google_email,
-            name=name, picture=picture, garmin_email=garmin_email, role=role,
+            google_sub=f"garmin_{garmin_email}",
+            google_email=garmin_email,
+            name=name,
+            picture="",
+            garmin_email=garmin_email,
+            role="Brew Crew",
         )
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 409
 
+    # Authenticate Garmin
     try:
         g.login_and_save(new_member["id"], garmin_email, garmin_password)
     except Exception as exc:
@@ -203,7 +199,7 @@ def join():
     safe = {k: new_member.get(k) for k in
             ("id","name","role","emoji","color","bg","garminDevice",
              "types","picture","google_email","joined_at")}
-    return jsonify({"member": safe, "message": "Welcome to the squad! 🎉"}), 201
+    return jsonify({"member": safe, "message": "Welcome to Brew Crew! 🎉"}), 201
 
 
 @app.delete("/api/members/<int:member_id>")
