@@ -88,17 +88,16 @@ def fetch_latest_bmi(client: garth.Client) -> float | None:
     Returns the most recently recorded BMI value, or None if unavailable.
     Searches back up to 90 days.
     """
-    today = date.today()
-    data = fetch_body_composition(client, today - timedelta(days=90), today)
-    entries = data.get("dateWeightList") or data.get("allWeightMetrics", [])
-    # Filter entries that have a BMI value
-    bmi_entries = [
-        e for e in entries if e.get("bmi") is not None
-    ]
-    if not bmi_entries:
+    try:
+        today = date.today()
+        data = fetch_body_composition(client, today - timedelta(days=90), today)
+        entries = data.get("dateWeightList") or data.get("allWeightMetrics", [])
+        bmi_entries = [e for e in entries if e.get("bmi") is not None]
+        if not bmi_entries:
+            return None
+        return bmi_entries[-1].get("bmi")
+    except Exception:
         return None
-    # Return the most recent
-    return bmi_entries[-1].get("bmi")
 
 
 # ── activities ────────────────────────────────────────────────────────────────
