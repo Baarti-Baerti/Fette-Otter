@@ -1193,9 +1193,9 @@ async function loadData(period = '1w') {
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const team = await res.json();
-    if (!Array.isArray(team) || !team.length) throw new Error('Empty response');
+    if (!Array.isArray(team)) throw new Error('Invalid response');
 
-    users = team.map((u, i) => normaliseUser(u, i));
+    users = team.length ? team.map((u, i) => normaliseUser(u, i)) : MOCK_USERS.map((u, i) => normaliseUser(u, i));
     // Fill mock monthly only for stub users (backend returns empty monthly for unauthenticated)
     users.forEach(u => { if (!u.monthly || u.monthly.length < 12) u.monthly = genMonthly(u); });
 
@@ -1205,10 +1205,12 @@ async function loadData(period = '1w') {
 
     // Count how many are live vs stub
     const liveCount = team.filter(u => !u._stub).length;
-    if (liveCount === users.length) {
-      showBanner(`✅ Live Garmin data · ${users.length} athletes synced`, 'live');
+    if (team.length === 0) {
+      showBanner('✅ Backend connected · No members yet — click "Join Brew Crew" to add yourself!', 'live');
+    } else if (liveCount === team.length) {
+      showBanner(`✅ Live Garmin data · ${team.length} athletes synced`, 'live');
     } else {
-      showBanner(`⚡ ${liveCount}/${users.length} athletes live — run auth_setup.py for the rest`, 'warning');
+      showBanner(`⚡ ${liveCount}/${team.length} athletes live — run auth_setup.py for the rest`, 'warning');
     }
     renderAll();
 
