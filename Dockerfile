@@ -28,4 +28,4 @@ CMD gunicorn \
     --timeout 120 \
     --access-logfile - \
     --error-logfile - \
-    "api.server:app"
+    "wsgi:app"
