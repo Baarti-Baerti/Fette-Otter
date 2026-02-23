@@ -1656,11 +1656,20 @@ function updateHeaderChip(member) {
 
 // ── Open / close modal ────────────────────────────────────────────
 function openJoinModal() {
+  clearModalMsg();
+  // Always show the form — pre-fill name if already joined
+  goToStep(1);
   if (currentMember) {
-    goToStep(3);
-    showSuccessScreen(currentMember, true);
+    document.getElementById('nameInput').value        = currentMember.name || '';
+    document.getElementById('garminEmailInput').value = currentMember.google_email || '';
+    document.getElementById('garminPasswordInput').value = '';
+    // Update button to say "Re-connect"
+    document.getElementById('joinBtnText').textContent = 'Re-connect Garmin 🔄';
   } else {
-    goToStep(1);
+    document.getElementById('nameInput').value        = '';
+    document.getElementById('garminEmailInput').value = '';
+    document.getElementById('garminPasswordInput').value = '';
+    document.getElementById('joinBtnText').textContent = 'Join Brew Crew 🎉';
   }
   document.getElementById('joinModal').classList.add('open');
 }
