@@ -177,59 +177,67 @@ def list_members():
 
 @app.post("/api/members/join")
 def join():
-    body            = request.get_json(silent=True) or {}
-    name            = (body.get("name")            or "").strip()
-    garmin_email    = (body.get("garmin_email")    or "").strip()
-    garmin_password = (body.get("garmin_password") or "").strip()
-
-    if not name:
-        return jsonify({"error": "name is required"}), 400
-    if not garmin_email or not garmin_password:
-        return jsonify({"error": "garmin_email and garmin_password are required"}), 400
-
-    # Check if Garmin email already registered
-    existing = next((m for m in g.all_members() if m.get("garmin_email") == garmin_email), None)
-    if existing:
-        # If already authenticated, just return their profile
-        if g.is_authenticated(existing["id"]):
-            safe = {k: existing.get(k) for k in
-                    ("id","name","role","emoji","color","bg","garminDevice",
-                     "types","picture","google_email","joined_at")}
-            return jsonify({"member": safe, "message": "Already in the squad!", "rejoined": True}), 200
-        # Member exists but token is missing — re-authenticate
-        try:
-            g.login_and_save(existing["id"], garmin_email, garmin_password)
-            safe = {k: existing.get(k) for k in
-                    ("id","name","role","emoji","color","bg","garminDevice",
-                     "types","picture","google_email","joined_at")}
-            return jsonify({"member": safe, "message": "Welcome back! 🎉", "rejoined": True}), 200
-        except Exception as exc:
-            return jsonify({"error": f"Garmin Connect login failed — check your email and password. ({exc})"}), 422
-
-    # Create member record
     try:
+        body            = request.get_json(silent=True) or {}
+        name            = (body.get("name")            or "").strip()
+        garmin_email    = (body.get("garmin_email")    or "").strip()
+        garmin_password = (body.get("garmin_password") or "").strip()
+
+        if not name:
+            return jsonify({"error": "name is required"}), 400
+        if not garmin_email or not garmin_password:
+            return jsonify({"error": "garmin_email and garmin_password are required"}), 400
+
+        # Check if Garmin email already registered
+        existing = next((m for m in g.all_members() if m.get("garmin_email") == garmin_email), None)
+        if existing:
+            # If already authenticated, just return their profile
+            if g.is_authenticated(existing["id"]):
+                safe = {k: existing.get(k) for k in
+                        ("id","name","role","emoji","color","bg","garminDevice",
+                         "types","picture","google_email","joined_at")}
+                return jsonify({"member": safe, "message": "Already in the squad!", "rejoined": True}), 200
+            # Member exists but token is missing — re-authenticate
+            try:
+                g.login_and_save(existing["id"], garmin_email, garmin_password)
+                safe = {k: existing.get(k) for k in
+                        ("id","name","role","emoji","color","bg","garminDevice",
+                         "types","picture","google_email","joined_at")}
+                return jsonify({"member": safe, "message": "Welcome back! 🎉", "rejoined": True}), 200
+            except Exception as exc:
+                return jsonify({"error": f"Garmin Connect login failed — check your email and password. ({exc})"}), 422
+
+        # Create member record — use garmin_email as unique key
+        google_sub = f"garmin_{garmin_email}"
+        # Remove any stale record with same google_sub (shouldn't happen but be safe)
+        stale = g.get_by_google_sub(google_sub)
+        if stale:
+            g.remove_member(stale["id"])
+
         new_member = g.add_member(
-            google_sub=f"garmin_{garmin_email}",
+            google_sub=google_sub,
             google_email=garmin_email,
             name=name,
             picture="",
             garmin_email=garmin_email,
             role="Brew Crew",
         )
-    except ValueError as exc:
-        return jsonify({"error": str(exc)}), 409
 
-    # Authenticate Garmin
-    try:
-        g.login_and_save(new_member["id"], garmin_email, garmin_password)
+        # Authenticate Garmin
+        try:
+            g.login_and_save(new_member["id"], garmin_email, garmin_password)
+        except Exception as exc:
+            g.remove_member(new_member["id"])
+            return jsonify({"error": f"Garmin Connect login failed — check your email and password. ({exc})"}), 422
+
+        safe = {k: new_member.get(k) for k in
+                ("id","name","role","emoji","color","bg","garminDevice",
+                 "types","picture","google_email","joined_at")}
+        return jsonify({"member": safe, "message": "Welcome to Brew Crew! 🎉"}), 201
+
     except Exception as exc:
-        g.remove_member(new_member["id"])
-        return jsonify({"error": f"Garmin Connect login failed — check your email and password. ({exc})"}), 422
-
-    safe = {k: new_member.get(k) for k in
-            ("id","name","role","emoji","color","bg","garminDevice",
-             "types","picture","google_email","joined_at")}
-    return jsonify({"member": safe, "message": "Welcome to Brew Crew! 🎉"}), 201
+        log.exception("Unexpected error in /api/members/join: %s", exc)
+        return jsonify({"error": f"Server error: {str(exc)}"}), 500
 
 
 @app.delete("/api/members/<int:member_id>")
