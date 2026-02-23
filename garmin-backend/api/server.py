@@ -273,6 +273,20 @@ def remove_member_route(member_id: int):
     return jsonify({"message": f"Removed {member['name']} from the squad"}), 200
 
 
+@app.get("/api/debug/<int:user_id>")
+def debug_user(user_id: int):
+    """Debug endpoint — shows exactly what happens when fetching a user."""
+    member = g.get_member(user_id)
+    if not member:
+        return jsonify({"error": "member not found"}), 404
+    try:
+        client = g.get_client(user_id)
+        username = client.username
+        return jsonify({"status": "client_ok", "username": username, "member": member["name"]})
+    except Exception as exc:
+        return jsonify({"status": "client_failed", "error": str(exc), "type": type(exc).__name__})
+
+
 @app.get("/api/team")
 def get_team():
     members = g.all_members()
