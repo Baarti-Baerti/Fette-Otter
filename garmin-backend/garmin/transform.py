@@ -69,30 +69,26 @@ def _km_by_type(activities: list[dict[str, Any]]) -> dict[str, float]:
 
 def _split_km(activities: list[dict[str, Any]]) -> dict[str, float]:
     """Return per-category km split for leaderboard columns."""
-    run = cycle = vcycle = swim = ski = other = 0.0
+    run = cycle = vcycle = swim = ski = walk = other = 0.0
     for a in activities:
         if a["distance_m"] <= 0:
             continue
         km = a["distance_m"] / 1000
         t = a["type"] or ""
-        if t == "Running":
-            run += km
-        elif t == "Cycling":
-            cycle += km
-        elif t == "VirtualCycling":
-            vcycle += km
-        elif t == "Swimming":
-            swim += km
-        elif t == "Skiing":
-            ski += km
-        else:
-            other += km
+        if t == "Running":        run   += km
+        elif t == "Cycling":      cycle  += km
+        elif t == "VirtualCycling": vcycle += km
+        elif t == "Swimming":     swim  += km
+        elif t == "Skiing":       ski   += km
+        elif t == "Walking":      walk  += km
+        else:                     other += km
     return {
         "runKm":      round(run, 1),
         "cycleKm":    round(cycle, 1),
         "virtualKm":  round(vcycle, 1),
         "swimKm":     round(swim, 1),
         "skiKm":      round(ski, 1),
+        "walkKm":     round(walk, 1),
         "otherKm":    round(other, 1),
     }
 
@@ -154,6 +150,7 @@ def build_week_summary(
         "virtualKm":   split["virtualKm"],
         "swimKm":      split["swimKm"],
         "skiKm":       split["skiKm"],
+        "walkKm":      split["walkKm"],
         "otherKm":     split["otherKm"],
     }
 
@@ -259,6 +256,7 @@ def build_user_payload(
         "virtualKm":   week.get("virtualKm", 0),
         "swimKm":      week.get("swimKm", 0),
         "skiKm":       week.get("skiKm", 0),
+        "walkKm":      week.get("walkKm", 0),
         "otherKm":     week.get("otherKm", 0),
         "actKcal":     week["actKcal"],
         "bmi":         round(bmi, 1) if bmi else 0.0,
