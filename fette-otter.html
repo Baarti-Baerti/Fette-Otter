@@ -1866,88 +1866,106 @@ function renderMonthly() {
     return;
   }
 
-  const months = users[0].monthly; // 12 entries
-  const nM = months.length;
+  const currentYear = new Date().getFullYear();
+  const currentMonth = new Date().getMonth() + 1; // 1-12
 
-  // Month labels from data
-  const xLabels = months.map(m =>
-    (m.year && m.month) ? MONTH_NAMES[m.month - 1] : (m.label || '?')
-  );
+  // Always Jan–Dec, data only where available (Jan–current month)
+  const allMonths = MONTH_NAMES.map((label, i) => {
+    const mo = i + 1;
+    const dataMonth = users[0].monthly.find(m => m.month === mo && m.year === currentYear);
+    return { label, mo, hasData: mo <= currentMonth, dataMonth };
+  });
 
-  // Legend row (all users)
+  // Legend row
   const legend = `<div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:6px;padding:12px 20px 0">
     ${users.map(u => {
-      const dot = `<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${u.color};margin-right:5px;vertical-align:middle;flex-shrink:0"></span>`;
       const pic = u.picture
         ? `<img src="${u.picture}" style="width:18px;height:18px;border-radius:5px;object-fit:cover;margin-right:5px;vertical-align:middle;flex-shrink:0">`
         : `<span style="margin-right:4px;font-size:.8rem">${u.emoji}</span>`;
+      const dot = `<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${u.color};margin-right:5px;vertical-align:middle"></span>`;
       return `<span style="display:inline-flex;align-items:center;font-size:.72rem;font-weight:800;color:var(--text2)">${pic}${dot}${u.name.split(' ')[0]}</span>`;
     }).join('')}
   </div>`;
 
-  // Build one SVG chart per metric
   const charts = MP_METRICS.map(metric => {
     const W = 560, H = 200, pL = 44, pR = 16, pT = 14, pB = 28;
     const iW = W - pL - pR, iH = H - pT - pB;
+    const nM = 12; // always full year on X axis
 
-    // Collect all values to determine Y scale
-    const allVals = users.flatMap(u => months.map((_, mi) => metric.field(u.monthly[mi] || {})));
+    // Only compute scale from months that have data
+    const dataMonthIndices = allMonths.map((m, i) => m.hasData ? i : -1).filter(i => i >= 0);
+    const allVals = users.flatMap(u =>
+      dataMonthIndices.map(i => {
+        const mo = i + 1;
+        const mData = u.monthly.find(m => m.month === mo && m.year === currentYear);
+        return mData ? metric.field(mData) : 0;
+      })
+    );
     const maxV = Math.max(...allVals, 1);
     const minV = 0;
 
-    const xPos = i => pL + (i / Math.max(nM - 1, 1)) * iW;
+    const xPos = i => pL + (i / (nM - 1)) * iW;
     const yPos = v => pT + iH * (1 - (v - minV) / (maxV - minV));
 
     let svg = '';
 
-    // Grid lines + Y axis labels (4 lines)
-    const yTicks = [0, 0.25, 0.5, 0.75, 1.0];
-    yTicks.forEach(t => {
+    // Shade future months
+    const futureStart = xPos(currentMonth); // x position after last data month
+    svg += `<rect x="${futureStart}" y="${pT}" width="${W - pR - futureStart}" height="${iH}" fill="#f1f5f9" opacity="0.6"/>`;
+
+    // Grid lines + Y axis labels
+    [0, 0.25, 0.5, 0.75, 1.0].forEach(t => {
       const v = minV + t * (maxV - minV);
       const y = yPos(v);
       svg += `<line x1="${pL}" y1="${y}" x2="${W - pR}" y2="${y}" stroke="#e2e8f8" stroke-width="1"/>`;
       svg += `<text x="${pL - 5}" y="${y + 4}" text-anchor="end" font-family="Nunito,sans-serif" font-size="9" fill="#94a3b8" font-weight="700">${metric.axFmt(v)}</text>`;
     });
 
-    // X axis labels
-    xLabels.forEach((lbl, i) => {
-      svg += `<text x="${xPos(i)}" y="${H - 4}" text-anchor="middle" font-family="Nunito,sans-serif" font-size="9" fill="#94a3b8" font-weight="700">${lbl}</text>`;
+    // X axis labels — all 12 months
+    MONTH_NAMES.forEach((lbl, i) => {
+      const future = i + 1 > currentMonth;
+      svg += `<text x="${xPos(i)}" y="${H - 4}" text-anchor="middle" font-family="Nunito,sans-serif" font-size="9" fill="${future ? '#cbd5e1' : '#94a3b8'}" font-weight="700">${lbl}</text>`;
     });
 
-    // Per-user lines + dots
+    // Per-user lines + dots (only up to current month)
     users.forEach(u => {
-      const vals = months.map((_, mi) => metric.field(u.monthly[mi] || {}));
+      const vals = allMonths.map((m, i) => {
+        if (!m.hasData) return null;
+        const mData = u.monthly.find(md => md.month === m.mo && md.year === currentYear);
+        return { i, v: mData ? metric.field(mData) : 0 };
+      }).filter(Boolean);
 
-      // Filled area under the line
+      if (vals.length === 0) return;
+
+      // Filled area
       const areaPoints = [
-        `${xPos(0)},${pT + iH}`,
-        ...vals.map((v, i) => `${xPos(i)},${yPos(v)}`),
-        `${xPos(nM - 1)},${pT + iH}`,
+        `${xPos(vals[0].i)},${pT + iH}`,
+        ...vals.map(({ i, v }) => `${xPos(i)},${yPos(v)}`),
+        `${xPos(vals[vals.length - 1].i)},${pT + iH}`,
       ].join(' ');
-      svg += `<polygon points="${areaPoints}" fill="${u.color}" opacity="0.06"/>`;
+      svg += `<polygon points="${areaPoints}" fill="${u.color}" opacity="0.07"/>`;
 
       // Line
-      const linePoints = vals.map((v, i) => `${xPos(i)},${yPos(v)}`).join(' ');
+      const linePoints = vals.map(({ i, v }) => `${xPos(i)},${yPos(v)}`).join(' ');
       svg += `<polyline points="${linePoints}" fill="none" stroke="${u.color}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" opacity="0.95"/>`;
 
-      // Dots with tooltip title
-      vals.forEach((v, i) => {
-        const lbl = xLabels[i];
+      // Dots
+      vals.forEach(({ i, v }) => {
         svg += `<circle cx="${xPos(i)}" cy="${yPos(v)}" r="3.5" fill="${u.color}" stroke="#fff" stroke-width="1.5">
-          <title>${u.name.split(' ')[0]} · ${lbl}: ${metric.valFmt(v)}</title>
+          <title>${u.name.split(' ')[0]} · ${MONTH_NAMES[i]} ${currentYear}: ${metric.valFmt(v)}</title>
         </circle>`;
       });
     });
 
     return `<div class="mp-chart-panel">
-      <div class="mp-chart-title">${metric.label}</div>
+      <div class="mp-chart-title">${metric.label} — ${currentYear}</div>
       <div style="overflow-x:auto">
         <svg width="100%" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" style="display:block;min-width:320px">${svg}</svg>
       </div>
     </div>`;
   }).join('');
 
-  document.getElementById('mpUserRow').innerHTML = '';   // no user filter needed — all lines visible
+  document.getElementById('mpUserRow').innerHTML = '';
   document.getElementById('mpCharts').innerHTML = legend + charts;
 }
 
