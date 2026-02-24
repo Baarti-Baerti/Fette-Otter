@@ -1490,7 +1490,6 @@ function renderLB(){
     { key:'runKm',     label:'🏃 Run',          fmt: u => fmtKm(u.runKm),                        unit:'km' },
     { key:'cycleKm',   label:'🚴 Bike',         fmt: u => fmtKm(u.cycleKm),                      unit:'km' },
     { key:'virtualKm', label:'💻 Virtual bike', fmt: u => fmtKm(u.virtualKm),                    unit:'km' },
-    { key:'skiKm',     label:'⛷️ Ski',          fmt: u => fmtKm(u.skiKm),                        unit:'km' },
     { key:'swimKm',    label:'🏊 Swim',         fmt: u => fmtKm(u.swimKm),                       unit:'km' },
     { key:'walkKm',    label:'🚶 Walk',         fmt: u => fmtKm(u.walkKm),                       unit:'km' },
     { key:'km',        label:'Total',           fmt: u => fmtKm(u.km),                           unit:'km' },
@@ -1566,7 +1565,6 @@ function renderDetail(){
     {label:'🏃 Running',      km: u.runKm||0,     color:'#818cf8'},
     {label:'🚴 Biking',       km: u.cycleKm||0,   color:'#34d399'},
     {label:'💻 Virtual bike', km: u.virtualKm||0,  color:'#38bdf8'},
-    {label:'⛷️ Skiing',       km: u.skiKm||0,     color:'#60a5fa'},
     {label:'🏊 Swimming',     km: u.swimKm||0,    color:'#22d3ee'},
     {label:'🚶 Walking',      km: u.walkKm||0,    color:'#fbbf24'},
   ].filter(r => r.km > 0);
@@ -1586,10 +1584,15 @@ function renderDetail(){
       }).join('')
     : `<div style="font-size:.75rem;color:var(--muted);font-weight:600">${totalKm}km total — no activity data yet</div>`;
 
+  const provBadge = u.provider === 'strava'
+    ? `<span style="font-size:.62rem;background:#fff3e0;color:#c2410c;border-radius:6px;padding:2px 6px;font-weight:800;margin-left:6px;vertical-align:middle">STR</span>`
+    : `<span style="font-size:.62rem;background:#e0f2fe;color:#0369a1;border-radius:6px;padding:2px 6px;font-weight:800;margin-left:6px;vertical-align:middle">GRM</span>`;
+  const deviceLabel = u.provider === 'strava' ? 'Strava' : (u.garminDevice || 'Garmin');
+
   document.getElementById('userDetail').innerHTML=`
     <div class="detail-avatar" style="background:${u.bg}">${u.picture ? `<img src="${u.picture}" style="width:100%;height:100%;border-radius:18px;object-fit:cover">` : u.emoji}</div>
-    <div class="detail-name">${u.name}</div>
-    <div class="detail-role">Rank #${rank} · ${u.garminDevice}</div>
+    <div class="detail-name">${u.name}${provBadge}</div>
+    <div class="detail-role">Rank #${rank} · ${deviceLabel}</div>
     <div class="detail-grid">
       <div class="detail-item"><div class="detail-item-lbl">Sessions</div><div class="detail-item-val" style="color:${u.color}">${u.workouts}</div></div>
       <div class="detail-item"><div class="detail-item-lbl">Distance</div><div class="detail-item-val">${u.km}<span style="font-size:.9rem">km</span></div></div>
