@@ -120,10 +120,8 @@ def load_garmin_user_data(member: dict[str, Any], range_days: int) -> dict[str, 
                 g.update_member(uid, {"picture": pic})
                 member = g.get_member(uid)  # refresh
 
-        months_to_fetch = []
-        for i in range(11, -1, -1):
-            m_date = date(today.year, today.month, 1) - timedelta(days=30 * i)
-            months_to_fetch.append((m_date.year, m_date.month))
+        # Fetch Jan through current month of the current year
+        months_to_fetch = [(today.year, mo) for mo in range(1, today.month + 1)]
 
         monthly_acts: dict[str, list] = {}
         monthly_bmis: dict[str, Any] = {}
