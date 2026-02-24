@@ -469,23 +469,79 @@ def join():
 
 @app.delete("/api/members/<int:member_id>")
 def remove_member_route(member_id: int):
-    body     = request.get_json(silent=True) or {}
-    id_token = (body.get("id_token") or "").strip()
-    if not id_token:
-        return jsonify({"error": "id_token required"}), 400
-    try:
-        payload = verify_google_id_token(id_token)
-    except ValueError as exc:
-        return jsonify({"error": str(exc)}), 401
+    body       = request.get_json(silent=True) or {}
+    admin_name = (body.get("admin_name") or "").strip()
+
+    # Admin check — only "Martin" can remove members
+    ADMIN_NAME = os.environ.get("ADMIN_NAME", "Martin")
+    if admin_name != ADMIN_NAME:
+        return jsonify({"error": "Forbidden — admin only"}), 403
+
+    # Verify the requesting member actually exists with that name
+    all_m = g.all_members()
+    admin = next((m for m in all_m if m.get("name") == ADMIN_NAME), None)
+    if not admin:
+        return jsonify({"error": "Admin account not found"}), 403
 
     member = g.get_member(member_id)
     if not member:
         return jsonify({"error": "Member not found"}), 404
-    if member.get("google_sub") != payload.get("sub"):
-        return jsonify({"error": "Forbidden"}), 403
+    if member.get("name") == ADMIN_NAME:
+        return jsonify({"error": "Cannot remove the admin"}), 403
 
     g.remove_member(member_id)
-    return jsonify({"message": f"Removed {member['name']} from the squad"}), 200
+    log.info("Admin removed member %s (id=%s)", member["name"], member_id)
+    return jsonify({"message": f"Removed {member['name']} from Fette Otter"}), 200
+
+
+@app.get("/api/debug/strava/<int:user_id>")
+def debug_strava(user_id: int):
+    """Debug Strava data fetch for a user."""
+    member = g.get_member(user_id)
+    if not member:
+        return jsonify({"error": "member not found"}), 404
+    if member.get("provider") != "strava":
+        return jsonify({"error": "not a strava member", "provider": member.get("provider")}), 400
+
+    results = {"member": member["name"], "steps": {}}
+
+    # Step 1: check token
+    token = sv.load_token(user_id)
+    if not token:
+        return jsonify({"error": "no strava token found"}), 404
+    results["token_keys"] = list(token.keys())
+    results["expires_at"] = token.get("expires_at")
+    results["has_athlete"] = "athlete" in token
+
+    # Step 2: get access token (triggers refresh if needed)
+    try:
+        access_token = sv.get_access_token(user_id)
+        results["steps"]["get_access_token"] = "OK"
+    except Exception as exc:
+        results["steps"]["get_access_token"] = f"FAILED: {exc}"
+        return jsonify(results), 500
+
+    # Step 3: fetch athlete profile
+    try:
+        athlete = sv.get_athlete(user_id)
+        results["steps"]["get_athlete"] = f"OK — {athlete.get('firstname')} {athlete.get('lastname')}"
+    except Exception as exc:
+        results["steps"]["get_athlete"] = f"FAILED: {exc}"
+
+    # Step 4: fetch last 30 days of activities
+    try:
+        today = date.today()
+        start = today - timedelta(days=30)
+        acts = sv.fetch_activities(user_id, start, today)
+        results["steps"]["fetch_activities_30d"] = f"OK — {len(acts)} activities"
+        results["sample_activity"] = acts[0] if acts else None
+        results["activity_types"] = list({
+            (a.get("sport_type") or a.get("type", "?")) for a in acts
+        })
+    except Exception as exc:
+        results["steps"]["fetch_activities_30d"] = f"FAILED: {exc}"
+
+    return jsonify(results)
 
 
 @app.get("/api/debug/activity-types/<int:user_id>")
