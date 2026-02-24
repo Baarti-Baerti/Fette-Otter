@@ -22,7 +22,7 @@ from flask_cors import CORS
 from garth.exc import GarthException, GarthHTTPError
 import garmin as g
 from garmin import strava as sv
-from garmin.transform import build_user_payload, build_week_summary, build_month_summary, _normalise_activity
+from garmin.transform import build_month_summary
 
 logging.basicConfig(
     level=logging.INFO,
