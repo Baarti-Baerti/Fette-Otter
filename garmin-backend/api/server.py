@@ -113,6 +113,13 @@ def load_garmin_user_data(member: dict[str, Any], range_days: int) -> dict[str, 
         week_summaries = g.fetch_daily_summaries(client, start, range_days)
         bmi            = g.fetch_latest_bmi(client)
 
+        # Fetch and cache profile picture if not already stored
+        if not member.get("picture"):
+            pic = g.fetch_profile_picture(client)
+            if pic:
+                g.update_member(uid, {"picture": pic})
+                member = g.get_member(uid)  # refresh
+
         months_to_fetch = []
         for i in range(11, -1, -1):
             m_date = date(today.year, today.month, 1) - timedelta(days=30 * i)
