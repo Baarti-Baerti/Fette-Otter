@@ -1521,55 +1521,63 @@ function renderPoints(){
   const el = document.getElementById('pointsContent');
   if (!el) return;
 
-  const GOAL = 66.67;  // monthly running km goal
+  const GOAL = 66.67;
   const today = new Date();
   const currentYear = today.getFullYear();
-
-  // Build per-user monthly run data from user.monthly
-  // monthly array is 12 entries newest-last, each has { year, month, runKm }
-  // We need to know which months are complete (not the current month if still ongoing)
   const currentMonth = today.getMonth() + 1; // 1-12
+  const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
-  // Rule A: count months in the current calendar year where runKm >= GOAL
-  // We only count months that have passed (or current month if complete)
-  const ruleAPoints = {};
-  const ruleAMonths = {}; // which months each user hit the goal
-
-  users.forEach(u => {
-    let pts = 0;
-    const hitMonths = [];
+  // Build a lookup: userId → { month(1-12): runKm } for current year only
+  function monthlyRunMap(u) {
+    const map = {};
     (u.monthly || []).forEach(m => {
-      if (!m.year || !m.month) return;
-      if (m.year !== currentYear) return;
-      // Only count months that have fully passed (not the current ongoing month)
-      if (m.month >= currentMonth) return;
-      const runKm = m.runKm || 0;
-      if (runKm >= GOAL) {
-        pts++;
-        hitMonths.push({ month: m.month, km: runKm });
+      if (m.year === currentYear && m.month >= 1 && m.month <= 12) {
+        map[m.month] = m.runKm || 0;
       }
     });
+    return map;
+  }
+
+  // Rule A: +1pt for each completed past month this year where runKm >= GOAL
+  // Current month is NOT counted (still in progress)
+  const ruleAPoints = {};
+  const ruleAData = {}; // { userId: { month: runKm } } for all past months
+
+  users.forEach(u => {
+    const runMap = monthlyRunMap(u);
+    let pts = 0;
+    const data = {};
+    for (let m = 1; m < currentMonth; m++) {
+      const km = runMap[m] || 0;
+      data[m] = km;
+      if (km >= GOAL) pts++;
+    }
     ruleAPoints[u.id] = pts;
-    ruleAMonths[u.id] = hitMonths;
+    ruleAData[u.id] = data;
   });
 
-  // Rule B: user with most running km YTD gets 2 points
-  // Use ytd cache data if available, else fall back to current view's runKm
-  let ytdUsers = users;
+  // Rule B: user with most YTD running km (current year) = +2pts
+  // Use YTD cache if available for accuracy
+  const ytdRunKm = {};
   if (dataCache['ytd'] && Array.isArray(dataCache['ytd'])) {
-    // Map ytd runKm back to users by id
-    const ytdMap = {};
-    dataCache['ytd'].forEach(u => { ytdMap[u.id] = u.runKm || 0; });
-    ytdUsers = users.map(u => ({ ...u, ytdRunKm: ytdMap[u.id] ?? u.runKm ?? 0 }));
+    dataCache['ytd'].forEach(u => { ytdRunKm[u.id] = u.runKm || 0; });
   } else {
-    ytdUsers = users.map(u => ({ ...u, ytdRunKm: u.runKm || 0 }));
+    // Fall back: sum all months this year from monthly data
+    users.forEach(u => {
+      const runMap = monthlyRunMap(u);
+      ytdRunKm[u.id] = Object.values(runMap).reduce((a,b)=>a+b, 0);
+    });
   }
-  const maxYtdRun = Math.max(...ytdUsers.map(u => u.ytdRunKm));
-  const ruleBWinners = maxYtdRun > 0 ? ytdUsers.filter(u => u.ytdRunKm === maxYtdRun).map(u => u.id) : [];
+  const maxYtdRun = Math.max(...Object.values(ytdRunKm), 0);
+  const ruleBWinners = maxYtdRun > 0
+    ? users.filter(u => (ytdRunKm[u.id]||0) === maxYtdRun).map(u => u.id)
+    : [];
 
-  // Rule C: user with most Rule A points gets 2 extra points
+  // Rule C: user with most Rule A points this year = +2pts
   const maxRuleA = Math.max(...Object.values(ruleAPoints), 0);
-  const ruleCWinners = maxRuleA > 0 ? users.filter(u => ruleAPoints[u.id] === maxRuleA).map(u => u.id) : [];
+  const ruleCWinners = maxRuleA > 0
+    ? users.filter(u => ruleAPoints[u.id] === maxRuleA).map(u => u.id)
+    : [];
 
   // Total points
   const totalPoints = {};
@@ -1580,85 +1588,106 @@ function renderPoints(){
       (ruleCWinners.includes(u.id) ? 2 : 0);
   });
 
-  const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-
-  // Build table rows sorted by total points desc
   const sorted = [...users].sort((a,b) => (totalPoints[b.id]||0) - (totalPoints[a.id]||0));
 
-  // Month columns for Rule A (months that have passed this year)
-  const monthCols = [];
-  for (let m = 1; m < currentMonth; m++) monthCols.push(m);
+  // All 12 months Jan–Dec
+  const allMonths = [1,2,3,4,5,6,7,8,9,10,11,12];
 
   const thead = `<tr>
-    <th style="text-align:left">Athlete</th>
-    ${monthCols.map(m => `<th title="Rule A: ≥${GOAL}km running in ${MONTH_NAMES[m-1]}">${MONTH_NAMES[m-1]}</th>`).join('')}
-    <th style="color:#818cf8" title="Rule A total points">Rule A</th>
-    <th style="color:#34d399" title="Rule B: most YTD run km (+2pts)">Rule B</th>
-    <th style="color:#f472b6" title="Rule C: most Rule A points (+2pts)">Rule C</th>
-    <th style="color:var(--text);font-size:.72rem">Total 🏅</th>
+    <th style="text-align:left;min-width:120px">Athlete</th>
+    ${allMonths.map(m => {
+      const isPast   = m < currentMonth;
+      const isCurrent = m === currentMonth;
+      const style = isCurrent ? 'color:var(--violet)' : !isPast ? 'color:#cbd5e1' : '';
+      return `<th style="${style}" title="${MONTH_NAMES[m-1]} ${currentYear}${isCurrent?' (in progress)':!isPast?' (upcoming)':''}">${MONTH_NAMES[m-1]}</th>`;
+    }).join('')}
+    <th style="color:#818cf8;border-left:2px solid var(--border)" title="Rule A: +1pt per month ≥${GOAL}km">A</th>
+    <th style="color:#34d399" title="Rule B: most YTD run km (+2pts)">B</th>
+    <th style="color:#f472b6" title="Rule C: most Rule A points (+2pts)">C</th>
+    <th style="border-left:2px solid var(--border)">Total 🏅</th>
   </tr>`;
 
   const tbody = sorted.map(u => {
-    const monthDots = monthCols.map(m => {
-      const hit = (ruleAMonths[u.id]||[]).find(x => x.month === m);
-      if (hit) return `<td title="${hit.km.toFixed(1)}km ✅"><span style="color:#059669;font-size:1rem">●</span></td>`;
-      return `<td><span style="color:#e2e8f8;font-size:1rem">●</span></td>`;
+    const runMap = monthlyRunMap(u);
+    const monthCells = allMonths.map(m => {
+      const isPast    = m < currentMonth;
+      const isCurrent = m === currentMonth;
+      const km = runMap[m];
+
+      if (isCurrent) {
+        // Show current month progress in muted style
+        const val = km != null ? km.toFixed(1) : '…';
+        const pct = km != null ? Math.min(100, Math.round(km/GOAL*100)) : 0;
+        const col = km >= GOAL ? '#059669' : '#f59e0b';
+        return `<td title="${MONTH_NAMES[m-1]}: ${val}km (in progress, goal ${GOAL}km)" style="font-size:.65rem;color:${col}">${val}</td>`;
+      }
+      if (!isPast) {
+        // Future month
+        return `<td style="color:#e2e8f8;font-size:.9rem">·</td>`;
+      }
+      // Past month — show filled/empty dot with km on hover
+      const hit = (km || 0) >= GOAL;
+      const val = km != null ? km.toFixed(1) : '0.0';
+      return `<td title="${MONTH_NAMES[m-1]}: ${val}km${hit?' ✅ (goal hit)':' ❌ (goal missed, need '+GOAL+'km)'}">
+        <span style="font-size:1rem;color:${hit?'#059669':'#e2e8f8'}">●</span>
+        ${hit?`<div style="font-size:.55rem;color:#059669;font-weight:700;line-height:1">${val}</div>`:''}
+      </td>`;
     }).join('');
+
     const ruleA = ruleAPoints[u.id] || 0;
-    const ruleB = ruleBWinners.includes(u.id) ? '+2' : '—';
-    const ruleC = ruleCWinners.includes(u.id) ? '+2' : '—';
+    const hasB  = ruleBWinners.includes(u.id);
+    const hasC  = ruleCWinners.includes(u.id);
     const total = totalPoints[u.id] || 0;
+
     return `<tr>
       <td>
-        <div style="display:flex;align-items:center;gap:8px">
-          <div style="width:26px;height:26px;border-radius:8px;background:${u.bg};display:flex;align-items:center;justify-content:center;font-size:.85rem">${u.emoji}</div>
-          <span style="font-weight:800;font-size:.82rem">${u.name}</span>
+        <div style="display:flex;align-items:center;gap:7px">
+          <div style="width:24px;height:24px;border-radius:7px;background:${u.bg};display:flex;align-items:center;justify-content:center;font-size:.8rem;flex-shrink:0">${u.emoji}</div>
+          <span style="font-weight:800;font-size:.8rem">${u.name}</span>
         </div>
       </td>
-      ${monthDots}
-      <td style="color:#818cf8;font-weight:900">${ruleA}</td>
-      <td style="color:${ruleBWinners.includes(u.id)?'#34d399':'var(--muted)'};font-weight:${ruleBWinners.includes(u.id)?900:600}">${ruleB}</td>
-      <td style="color:${ruleCWinners.includes(u.id)?'#f472b6':'var(--muted)'};font-weight:${ruleCWinners.includes(u.id)?900:600}">${ruleC}</td>
-      <td><span class="pts-total">${total}</span></td>
+      ${monthCells}
+      <td style="color:#818cf8;font-weight:900;border-left:2px solid var(--border)">${ruleA}</td>
+      <td style="color:${hasB?'#34d399':'var(--muted)'};font-weight:${hasB?900:600}">${hasB?'+2':'—'}</td>
+      <td style="color:${hasC?'#f472b6':'var(--muted)'};font-weight:${hasC?900:600}">${hasC?'+2':'—'}</td>
+      <td style="border-left:2px solid var(--border)"><span class="pts-total">${total}</span></td>
     </tr>`;
   }).join('');
 
-  // Rules legend
-  const legend = `<div style="display:flex;gap:20px;flex-wrap:wrap;margin-bottom:20px;font-size:0.72rem;font-weight:700;color:var(--muted)">
-    <span>● = month goal hit (≥${GOAL}km running)</span>
-    <span style="color:#818cf8">Rule A: +1pt per qualifying month</span>
-    <span style="color:#34d399">Rule B: most YTD run km = +2pts</span>
-    <span style="color:#f472b6">Rule C: most Rule A pts = +2pts</span>
+  const legend = `<div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:18px;font-size:0.7rem;font-weight:700;color:var(--muted)">
+    <span><span style="color:#059669">●</span> = ≥${GOAL}km running that month (+1pt)</span>
+    <span style="color:#818cf8">A: +1pt / qualifying month</span>
+    <span style="color:#34d399">B: most YTD run km = +2pts</span>
+    <span style="color:#f472b6">C: most Rule A pts = +2pts</span>
+    <span style="color:var(--violet)">Current month shown in progress, not yet scored</span>
   </div>`;
 
-  // Podium — top 3 by total points
+  // Podium — top 3
   const top3 = sorted.slice(0, 3);
-  const podiumOrder = top3.length >= 2
-    ? [top3[1], top3[0], top3[2]].filter(Boolean)  // 2nd, 1st, 3rd visual order
-    : top3;
-  const podiumClasses = top3.length >= 2 ? ['p2','p1','p3'] : ['p1','p2','p3'];
-  const podiumLabels = top3.length >= 2 ? ['🥈 2nd','🥇 1st','🥉 3rd'] : ['🥇 1st','🥈 2nd','🥉 3rd'];
-  const podiumHeights = { p1:'80px', p2:'56px', p3:'40px' };
+  const podiumOrder = top3.length >= 2 ? [top3[1], top3[0], top3[2]].filter(Boolean) : top3;
+  const podiumClasses  = top3.length >= 2 ? ['p2','p1','p3'] : ['p1','p2','p3'];
+  const podiumHeights  = { p1:'80px', p2:'56px', p3:'40px' };
+  const podiumMedals   = { p1:'🥇', p2:'🥈', p3:'🥉' };
 
-  const podiumHTML = `<div style="font-size:.65rem;color:var(--muted);font-weight:700;letter-spacing:.06em;text-transform:uppercase;margin-bottom:16px;text-align:center">🏆 Top 3</div>
+  const podiumHTML = top3.length === 0 ? '' : `
+  <div style="font-size:.65rem;color:var(--muted);font-weight:700;letter-spacing:.06em;text-transform:uppercase;margin-bottom:16px;text-align:center">🏆 Standings</div>
   <div class="podium-wrap">
     ${podiumOrder.map((u, i) => {
       const cls = podiumClasses[i];
-      const lbl = podiumLabels[i];
       const pts = totalPoints[u.id] || 0;
       const crown = cls === 'p1' ? '<span class="podium-crown">👑</span>' : '';
       return `<div class="podium-place">
         <div class="podium-avatar ${cls}" style="background:${u.bg}">${crown}${u.emoji}</div>
         <div class="podium-name">${u.name.split(' ')[0]}</div>
         <div class="podium-pts">${pts} pts</div>
-        <div class="podium-block ${cls}" style="height:${podiumHeights[cls]}">${lbl.split(' ')[0]}</div>
+        <div class="podium-block ${cls}" style="height:${podiumHeights[cls]}">${podiumMedals[cls]}</div>
       </div>`;
     }).join('')}
   </div>`;
 
   el.innerHTML = legend +
     `<div class="lb-scroll"><table class="pts-table"><thead>${thead}</thead><tbody>${tbody}</tbody></table></div>` +
-    (top3.length > 0 ? podiumHTML : '');
+    podiumHTML;
 }
 function setWeek(btn,p){
   document.querySelectorAll('.week-btn').forEach(b=>b.classList.remove('active')); btn.classList.add('active');
