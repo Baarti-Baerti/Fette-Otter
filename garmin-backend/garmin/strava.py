@@ -21,7 +21,7 @@ log = logging.getLogger("squad_stats.strava")
 STRAVA_CLIENT_ID     = os.environ.get("STRAVA_CLIENT_ID", "205412")
 STRAVA_CLIENT_SECRET = os.environ.get("STRAVA_CLIENT_SECRET", "")
 STRAVA_BASE          = "https://www.strava.com/api/v3"
-REDIRECT_URI         = "https://fetteotter.up.railway.app/api/strava/callback"
+REDIRECT_URI         = "https://fette-otter.up.railway.app/api/strava/callback"
 
 # ── Strava activity type → our normalised type ───────────────────────────────
 STRAVA_TYPE_MAP: dict[str, str] = {
