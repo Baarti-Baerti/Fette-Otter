@@ -227,14 +227,10 @@ def build_user_payload(
     """
     week = build_week_summary(week_activities, week_summaries, range_days)
 
-    # Build monthly array in the same order as the dashboard: Feb→Jan
+    # Build monthly array: Jan → current month of current year
     monthly = []
     today = date.today()
-    # Generate 12 months ending with the current month
-    months_keys: list[tuple[int, int]] = []
-    for i in range(11, -1, -1):
-        m_date = date(today.year, today.month, 1) - timedelta(days=30 * i)
-        months_keys.append((m_date.year, m_date.month))
+    months_keys: list[tuple[int, int]] = [(today.year, mo) for mo in range(1, today.month + 1)]
 
     for (yr, mo) in months_keys:
         key = f"{yr}-{mo:02d}"
