@@ -924,9 +924,10 @@
             <button class="mtab active" onclick="setMetric(this,'km')">Total km</button>
             <button class="mtab" onclick="setMetric(this,'runKm')">Run km</button>
             <button class="mtab" onclick="setMetric(this,'cycleKm')">Bike km</button>
-            <button class="mtab" onclick="setMetric(this,'virtualKm')">Virtual km</button>
+            <button class="mtab" onclick="setMetric(this,'virtualKm')">Virtual bike km</button>
             <button class="mtab" onclick="setMetric(this,'skiKm')">Ski km</button>
             <button class="mtab" onclick="setMetric(this,'swimKm')">Swim km</button>
+            <button class="mtab" onclick="setMetric(this,'walkKm')">Walking km</button>
             <button class="mtab" onclick="setMetric(this,'workouts')">Sessions</button>
             <button class="mtab" onclick="setMetric(this,'actKcal')">Act. Kcal</button>
           </div>
@@ -938,24 +939,10 @@
     <!-- Right column -->
     <div class="right-col">
       <div class="user-detail panel" id="userDetail"></div>
-      <div class="panel">
-        <div class="panel-header"><span class="panel-title">🎯 Workout Types</span></div>
-        <div class="workout-types" id="workoutTypes"></div>
-      </div>
     </div>
-  </div>
+  </div><!-- end main-grid -->
 
-  <div class="bottom-row">
-    <div class="panel">
-      <div class="panel-header"><span class="panel-title">🔥 Calories & Act. Kcal</span><span class="panel-badge">This week</span></div>
-      <div class="compare-chart" id="calorieChart"></div>
-    </div>
-    <div class="panel">
-      <div class="panel-header"><span class="panel-title">🗺️ Distance (km)</span><span class="panel-badge">This week</span></div>
-      <div class="rings-container" id="ringsContainer"></div>
-    </div>
-  </div>
-</div>
+</div><!-- end page-overview -->
 
 <!-- ══ MONTHLY PAGE ══ -->
 <div class="page" id="page-monthly">
@@ -1140,6 +1127,7 @@ function normaliseUser(raw, idx) {
     virtualKm:    raw.virtualKm    || 0,
     swimKm:       raw.swimKm       || 0,
     skiKm:        raw.skiKm        || 0,
+    walkKm:       raw.walkKm       || 0,
     otherKm:      raw.otherKm      || 0,
     actKcal:      raw.actKcal      || raw.active_kcal || 0,
     bmi:          raw.bmi          || null,
@@ -1314,7 +1302,7 @@ function switchPage(p,btn){
 }
 
 function renderAll(){
-  renderLB(); renderDetail(); renderTypes(); renderCalChart(); renderRings();
+  renderLB(); renderDetail();
   setTimeout(()=>{
     document.querySelectorAll('.bar-fill,.cbar,.mc-bar-fill,.umc-bar').forEach(b=>{
       const w=b.style.width; b.style.width='0';
@@ -1326,14 +1314,15 @@ function renderAll(){
 // ════ OVERVIEW ════
 function renderLB(){
   const COLS = [
-    { key:'workouts',  label:'Sessions', fmt: u => u.workouts||0,                      unit:'' },
-    { key:'runKm',     label:'🏃 Run',    fmt: u => fmtKm(u.runKm),                     unit:'km' },
-    { key:'cycleKm',   label:'🚴 Bike',   fmt: u => fmtKm(u.cycleKm),                   unit:'km' },
-    { key:'virtualKm', label:'💻 Virtual',fmt: u => fmtKm(u.virtualKm),                 unit:'km' },
-    { key:'skiKm',     label:'⛷️ Ski',    fmt: u => fmtKm(u.skiKm),                     unit:'km' },
-    { key:'swimKm',    label:'🏊 Swim',   fmt: u => fmtKm(u.swimKm),                    unit:'km' },
-    { key:'km',        label:'Total',     fmt: u => fmtKm(u.km),                        unit:'km' },
-    { key:'actKcal',   label:'Act. Kcal', fmt: u => ((u.actKcal||0)/1000).toFixed(1)+'K', unit:'' },
+    { key:'workouts',  label:'Sessions',       fmt: u => u.workouts||0,                         unit:'' },
+    { key:'runKm',     label:'🏃 Run',          fmt: u => fmtKm(u.runKm),                        unit:'km' },
+    { key:'cycleKm',   label:'🚴 Bike',         fmt: u => fmtKm(u.cycleKm),                      unit:'km' },
+    { key:'virtualKm', label:'💻 Virtual bike', fmt: u => fmtKm(u.virtualKm),                    unit:'km' },
+    { key:'skiKm',     label:'⛷️ Ski',          fmt: u => fmtKm(u.skiKm),                        unit:'km' },
+    { key:'swimKm',    label:'🏊 Swim',         fmt: u => fmtKm(u.swimKm),                       unit:'km' },
+    { key:'walkKm',    label:'🚶 Walk',         fmt: u => fmtKm(u.walkKm),                       unit:'km' },
+    { key:'km',        label:'Total',           fmt: u => fmtKm(u.km),                           unit:'km' },
+    { key:'actKcal',   label:'Act. Kcal',       fmt: u => ((u.actKcal||0)/1000).toFixed(1)+'K',  unit:'' },
   ];
   function fmtKm(v){ return (v||0) > 0 ? (v||0).toFixed(1) : '—'; }
 
@@ -1394,11 +1383,14 @@ function renderDetail(){
   const typeEntries = Object.entries(kmByType).sort((a,b)=>b[1]-a[1]);
   const totalKm = u.km || 0;
 
-  // Show run / bike / other summary first, then detailed breakdown
+  // Show per-activity distance breakdown
   const summaryRows = [
-    {label:'🏃 Running', km: u.runKm||0, color:'#818cf8'},
-    {label:'🚴 Biking',  km: u.cycleKm||0, color:'#34d399'},
-    {label:'⚡ Other',   km: u.otherKm||0, color:'#fbbf24'},
+    {label:'🏃 Running',      km: u.runKm||0,     color:'#818cf8'},
+    {label:'🚴 Biking',       km: u.cycleKm||0,   color:'#34d399'},
+    {label:'💻 Virtual bike', km: u.virtualKm||0,  color:'#38bdf8'},
+    {label:'⛷️ Skiing',       km: u.skiKm||0,     color:'#60a5fa'},
+    {label:'🏊 Swimming',     km: u.swimKm||0,    color:'#22d3ee'},
+    {label:'🚶 Walking',      km: u.walkKm||0,    color:'#fbbf24'},
   ].filter(r => r.km > 0);
 
   const distBreakdown = summaryRows.length > 0
