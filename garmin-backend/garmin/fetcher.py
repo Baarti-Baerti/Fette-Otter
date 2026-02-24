@@ -83,6 +83,20 @@ def fetch_body_composition(
     )
 
 
+def fetch_profile_picture(client: garth.Client) -> str:
+    """Fetch the user's Garmin Connect profile picture URL."""
+    try:
+        profile = client.connectapi("/userprofile-service/socialProfile")
+        return (
+            profile.get("profileImageUrlLarge")
+            or profile.get("profileImageUrlMedium")
+            or profile.get("profileImageUrl")
+            or ""
+        )
+    except Exception:
+        return ""
+
+
 def fetch_latest_bmi(client: garth.Client) -> float | None:
     """
     Returns the most recently recorded BMI value, or None if unavailable.

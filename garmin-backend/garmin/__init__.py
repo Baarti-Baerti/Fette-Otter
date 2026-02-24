@@ -5,6 +5,7 @@ from .fetcher import (
     fetch_activities_last_n_days,
     fetch_activities_for_month,
     fetch_latest_bmi,
+    fetch_profile_picture,
     ACTIVITY_TYPE_MAP,
 )
 from .transform import build_user_payload
@@ -21,7 +22,7 @@ __all__ = [
     "get_client", "login_and_save", "is_authenticated",
     "fetch_daily_summaries", "fetch_activities",
     "fetch_activities_last_n_days", "fetch_activities_for_month",
-    "fetch_latest_bmi", "ACTIVITY_TYPE_MAP",
+    "fetch_latest_bmi", "fetch_profile_picture", "ACTIVITY_TYPE_MAP",
     "build_user_payload",
     "all_members", "get_member", "get_by_google_sub",
     "add_member", "update_member", "remove_member",
