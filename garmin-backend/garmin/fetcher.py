@@ -146,24 +146,32 @@ ACTIVITY_TYPE_MAP = {
 
 
 def fetch_activities(
-    client: garth.Client, start: date, end: date, limit: int = 100
+    client: garth.Client, start: date, end: date, limit: int = 200
 ) -> list[dict[str, Any]]:
     """
     Fetch activity list for a date range.
-    Returns a list of activity dicts with keys like:
-        activityId, activityName, activityType, startTimeLocal,
-        distance, duration, calories, averageHR, maxHR
+    NOTE: Garmin's API may ignore startDate/endDate, so we filter client-side.
     """
-    return client.connectapi(
+    raw = client.connectapi(
         "/activitylist-service/activities/search/activities",
         params={
             "startDate": _date_str(start),
-            "endDate": _date_str(end),
-            "limit": limit,
-            "start": 0,
-            "_": "",
+            "endDate":   _date_str(end),
+            "limit":     limit,
+            "start":     0,
+            "_":         "",
         },
     ) or []
+
+    # Filter client-side to ensure we only return activities in the date range
+    start_str = start.isoformat()
+    end_str   = end.isoformat()
+    filtered = []
+    for a in raw:
+        act_date = (a.get("startTimeLocal") or "")[:10]
+        if act_date and start_str <= act_date <= end_str:
+            filtered.append(a)
+    return filtered
 
 
 def fetch_activities_for_month(
