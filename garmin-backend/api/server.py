@@ -285,6 +285,35 @@ def remove_member_route(member_id: int):
     return jsonify({"message": f"Removed {member['name']} from the squad"}), 200
 
 
+@app.get("/api/debug/activity-types/<int:user_id>")
+def debug_activity_types(user_id: int):
+    """Show all raw activityType keys returned by Garmin for this user."""
+    member = g.get_member(user_id)
+    if not member:
+        return jsonify({"error": "member not found"}), 404
+    try:
+        from datetime import date, timedelta
+        client = g.get_client(user_id)
+        # Fetch last 90 days to catch seasonal activities like skiing
+        today = date.today()
+        start = today - timedelta(days=365)
+        acts = g.fetch_activities(client, start, today, limit=500)
+        type_summary = {}
+        for a in acts:
+            raw = (
+                a.get("activityType", {}).get("typeKey", "unknown")
+                if isinstance(a.get("activityType"), dict)
+                else str(a.get("activityType", "unknown"))
+            )
+            mapped = g.ACTIVITY_TYPE_MAP.get(raw.lower(), f"UNMAPPED:{raw}")
+            key = f"{raw} → {mapped}"
+            type_summary[key] = type_summary.get(key, 0) + 1
+        return jsonify({"user": member["name"], "activity_types": type_summary,
+                        "total_activities": len(acts)})
+    except Exception as exc:
+        return jsonify({"error": str(exc), "type": type(exc).__name__}), 500
+
+
 @app.get("/api/debug/<int:user_id>")
 def debug_user(user_id: int):
     """Debug endpoint — shows exactly what happens when fetching a user."""
