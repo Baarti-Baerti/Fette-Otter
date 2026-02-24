@@ -67,6 +67,27 @@ def _km_by_type(activities: list[dict[str, Any]]) -> dict[str, float]:
     return result
 
 
+def _split_km(activities: list[dict[str, Any]]) -> dict[str, float]:
+    """Return runKm, cycleKm, otherKm split for leaderboard sorting."""
+    run = cycle = other = 0.0
+    for a in activities:
+        if a["distance_m"] <= 0:
+            continue
+        km = a["distance_m"] / 1000
+        t = a["type"] or ""
+        if t == "Running":
+            run += km
+        elif t == "Cycling":
+            cycle += km
+        else:
+            other += km
+    return {
+        "runKm":   round(run, 1),
+        "cycleKm": round(cycle, 1),
+        "otherKm": round(other, 1),
+    }
+
+
 # ── weekly summary ────────────────────────────────────────────────────────────
 
 def build_week_summary(
@@ -110,6 +131,7 @@ def build_week_summary(
     scale = range_days / 7
     total_activities = [a for a in norms]  # all fetched
 
+    split = _split_km(total_activities)
     return {
         "calories":  int(sum(a["calories"] for a in total_activities) * scale),
         "workouts":  len(total_activities),
@@ -118,6 +140,9 @@ def build_week_summary(
         "week":      day_flags,
         "weekCalories": day_cals,
         "kmByType":  _km_by_type(total_activities),
+        "runKm":     split["runKm"],
+        "cycleKm":   split["cycleKm"],
+        "otherKm":   split["otherKm"],
     }
 
 
@@ -217,6 +242,9 @@ def build_user_payload(
         "calories":    week["calories"],
         "workouts":    week["workouts"],
         "km":          week["km"],
+        "runKm":       week.get("runKm", 0),
+        "cycleKm":     week.get("cycleKm", 0),
+        "otherKm":     week.get("otherKm", 0),
         "actKcal":     week["actKcal"],
         "bmi":         round(bmi, 1) if bmi else 0.0,
         "week":        week["week"],
