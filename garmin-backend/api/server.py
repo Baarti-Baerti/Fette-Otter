@@ -544,6 +544,65 @@ def debug_strava(user_id: int):
     return jsonify(results)
 
 
+@app.get("/api/debug/ski/<int:user_id>")
+def debug_ski(user_id: int):
+    """Show exactly which activities are counted as ski km and why."""
+    member = g.get_member(user_id)
+    if not member:
+        return jsonify({"error": "member not found"}), 404
+
+    range_param = request.args.get("range", "thismonth")
+    rd = _range_days(range_param)
+    today = date.today()
+    start = today - timedelta(days=rd - 1)
+
+    try:
+        from garmin.fetcher import ACTIVITY_TYPE_MAP
+        client = g.get_client(user_id)
+        acts = g.fetch_activities_last_n_days(client, rd)
+
+        ski_acts = []
+        all_acts = []
+        for a in acts:
+            raw_type = (
+                a.get("activityType", {}).get("typeKey", "unknown")
+                if isinstance(a.get("activityType"), dict)
+                else str(a.get("activityType", "unknown"))
+            )
+            mapped = ACTIVITY_TYPE_MAP.get(raw_type.lower(), f"UNMAPPED:{raw_type}")
+            dist_m = float(a.get("distance") or 0)
+            dist_km = round(dist_m / 1000, 2)
+            act_date = (a.get("startTimeLocal") or "")[:10]
+            entry = {
+                "date": act_date,
+                "name": a.get("activityName", ""),
+                "raw_type": raw_type,
+                "mapped_type": mapped,
+                "distance_km": dist_km,
+                "in_range": start.isoformat() <= act_date <= today.isoformat(),
+            }
+            all_acts.append(entry)
+            if mapped == "Skiing":
+                ski_acts.append(entry)
+
+        total_ski_km = round(sum(a["distance_km"] for a in ski_acts if a["in_range"]), 2)
+        total_ski_km_unfiltered = round(sum(a["distance_km"] for a in ski_acts), 2)
+
+        return jsonify({
+            "period": range_param,
+            "range_days": rd,
+            "date_range": f"{start.isoformat()} → {today.isoformat()}",
+            "total_activities_fetched": len(acts),
+            "ski_activities": ski_acts,
+            "ski_km_in_range": total_ski_km,
+            "ski_km_unfiltered": total_ski_km_unfiltered,
+            "all_activities": all_acts,
+        })
+    except Exception as exc:
+        log.exception("Ski debug failed: %s", exc)
+        return jsonify({"error": str(exc)}), 500
+
+
 @app.get("/api/debug/activity-types/<int:user_id>")
 def debug_activity_types(user_id: int):
     """Show all raw activityType keys returned by Garmin for this user."""
