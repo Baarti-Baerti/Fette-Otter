@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Brew Crew Runners Challenge</title>
+<title>Fette Otter Runners Challenge</title>
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700;800;900&family=Nunito+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://accounts.google.com/gsi/client" async></script>
 <style>
@@ -939,9 +939,54 @@
 <!-- HEADER -->
 <header>
   <div class="logo">
-    <div class="logo-bubble">🏃</div>
+    <div class="logo-bubble" style="overflow:hidden;padding:0">
+      <!-- Fat Otter SVG -->
+      <svg viewBox="0 0 44 44" width="44" height="44" xmlns="http://www.w3.org/2000/svg">
+        <!-- gradient background -->
+        <defs>
+          <radialGradient id="bg" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stop-color="#a78bfa"/>
+            <stop offset="100%" stop-color="#7c3aed"/>
+          </radialGradient>
+        </defs>
+        <rect width="44" height="44" rx="14" fill="url(#bg)"/>
+        <!-- body - round chubby otter -->
+        <ellipse cx="22" cy="28" rx="13" ry="11" fill="#c4853a"/>
+        <!-- belly -->
+        <ellipse cx="22" cy="29" rx="8" ry="7" fill="#e8b87a"/>
+        <!-- head -->
+        <circle cx="22" cy="17" r="10" fill="#c4853a"/>
+        <!-- face light area -->
+        <ellipse cx="22" cy="19" rx="6" ry="5" fill="#e8b87a"/>
+        <!-- ears -->
+        <circle cx="13" cy="10" r="3.5" fill="#c4853a"/>
+        <circle cx="31" cy="10" r="3.5" fill="#c4853a"/>
+        <circle cx="13" cy="10" r="2" fill="#a06028"/>
+        <circle cx="31" cy="10" r="2" fill="#a06028"/>
+        <!-- eyes -->
+        <circle cx="18.5" cy="16" r="2.2" fill="#1a0a00"/>
+        <circle cx="25.5" cy="16" r="2.2" fill="#1a0a00"/>
+        <circle cx="19.2" cy="15.3" r="0.7" fill="#fff"/>
+        <circle cx="26.2" cy="15.3" r="0.7" fill="#fff"/>
+        <!-- nose -->
+        <ellipse cx="22" cy="19.5" rx="2" ry="1.3" fill="#5a2d0a"/>
+        <!-- mouth smile -->
+        <path d="M19.5 21.5 Q22 23.5 24.5 21.5" stroke="#5a2d0a" stroke-width="1" fill="none" stroke-linecap="round"/>
+        <!-- whiskers -->
+        <line x1="24" y1="19.5" x2="30" y2="18.5" stroke="#5a2d0a" stroke-width="0.6" stroke-linecap="round"/>
+        <line x1="24" y1="20.5" x2="30" y2="20.5" stroke="#5a2d0a" stroke-width="0.6" stroke-linecap="round"/>
+        <line x1="20" y1="19.5" x2="14" y2="18.5" stroke="#5a2d0a" stroke-width="0.6" stroke-linecap="round"/>
+        <line x1="20" y1="20.5" x2="14" y2="20.5" stroke="#5a2d0a" stroke-width="0.6" stroke-linecap="round"/>
+        <!-- arms/flippers -->
+        <ellipse cx="10" cy="29" rx="4" ry="2.5" fill="#c4853a" transform="rotate(-20 10 29)"/>
+        <ellipse cx="34" cy="29" rx="4" ry="2.5" fill="#c4853a" transform="rotate(20 34 29)"/>
+        <!-- feet -->
+        <ellipse cx="17" cy="38" rx="4.5" ry="2" fill="#a06028"/>
+        <ellipse cx="27" cy="38" rx="4.5" ry="2" fill="#a06028"/>
+      </svg>
+    </div>
     <div>
-      <div class="logo-text">Brew Crew</div>
+      <div class="logo-text">Fette Otter</div>
       <div class="logo-sub">RUNNERS CHALLENGE</div>
     </div>
   </div>
@@ -1054,15 +1099,15 @@
 
 <!-- ── JOIN FAB ── -->
 <button class="join-fab" id="joinFab" onclick="openJoinModal()">
-  <span class="fab-icon">🏃</span> Join Brew Crew
+  <span class="fab-icon">🦦</span> Join Fette Otter
 </button>
 
 <!-- ── JOIN MODAL ── -->
 <div class="modal-overlay" id="joinModal">
   <div class="modal-box">
     <div class="modal-header">
-      <span class="modal-header-icon">🏅</span>
-      <h2>Join Brew Crew</h2>
+      <span class="modal-header-icon">🦦</span>
+      <h2>Join Fette Otter</h2>
       <p>Enter your name and connect your Garmin</p>
       <button class="modal-close" onclick="closeJoinModal()">✕</button>
     </div>
@@ -1099,7 +1144,7 @@
           <div class="field-hint">🔒 Sent directly to Garmin — never stored on our servers</div>
         </div>
         <button class="btn-primary" id="joinBtn" onclick="submitJoin()">
-          <span id="joinBtnText">Join Brew Crew 🎉</span>
+          <span id="joinBtnText">Join Fette Otter 🦦</span>
         </button>
       </div>
 
@@ -1109,7 +1154,7 @@
       <!-- ── STEP 3: Success ── -->
       <div class="success-screen" id="step3">
         <span class="success-emoji">🎉</span>
-        <h3 id="successTitle">You're in Brew Crew!</h3>
+        <h3 id="successTitle">You're in Fette Otter! 🦦</h3>
         <p id="successMsg">Your Garmin data is syncing…</p>
         <div class="new-member-preview" id="newMemberPreview"></div>
         <button class="btn-primary" onclick="closeJoinModal()">View Dashboard</button>
@@ -1309,7 +1354,7 @@ function applyData(team, period, isLive) {
       users.forEach(u => { u.monthly = genMonthly(u); });
       const liveCount = team ? team.filter(u => !u._stub).length : 0;
       if (!team || team.length === 0) {
-        showBanner('✅ Backend connected · No members yet — click "Join Brew Crew" to add yourself!', 'live');
+        showBanner('✅ Backend connected · No members yet — click "Join Fette Otter" to add yourself!', 'live');
       }
     }
   } else {
@@ -1987,7 +2032,7 @@ function openJoinModal() {
     document.getElementById('nameInput').value        = '';
     document.getElementById('garminEmailInput').value = '';
     document.getElementById('garminPasswordInput').value = '';
-    document.getElementById('joinBtnText').textContent = 'Join Brew Crew 🎉';
+    document.getElementById('joinBtnText').textContent = 'Join Fette Otter 🦦';
   }
   document.getElementById('joinModal').classList.add('open');
 }
@@ -2074,7 +2119,7 @@ async function submitJoin() {
 
 function showSuccessScreen(member, rejoined = false) {
   document.getElementById('successTitle').textContent =
-    rejoined ? `Welcome back, ${member.name.split(' ')[0]}!` : `You're in Brew Crew! 🎉`;
+    rejoined ? `Welcome back, ${member.name.split(' ')[0]}!` : `You're in Fette Otter! 🦦`;
   document.getElementById('successMsg').textContent =
     rejoined ? 'Your stats are already on the leaderboard.' :
                'Your Garmin data is syncing — you\'ll appear on the leaderboard shortly.';
@@ -2082,7 +2127,7 @@ function showSuccessScreen(member, rejoined = false) {
     <div class="nmp-avatar" style="background:${member.bg}">${member.emoji}</div>
     <div>
       <div class="nmp-name">${member.name}</div>
-      <div class="nmp-role">Brew Crew · ${member.garminDevice || 'Garmin'}</div>
+      <div class="nmp-role">Fette Otter · ${member.garminDevice || 'Garmin'}</div>
     </div>
     <div style="margin-left:auto;font-size:.7rem;font-weight:700;color:#059669;background:#d1fae5;padding:3px 10px;border-radius:20px">
       ${rejoined ? 'Active' : 'Joined!'}
@@ -2096,7 +2141,7 @@ function setJoinLoading(loading) {
   btn.disabled = loading;
   text.innerHTML = loading
     ? '<div class="spinner"></div> Connecting to Garmin…'
-    : 'Join Brew Crew 🎉';
+    : 'Join Fette Otter 🦦';
 }
 
 function showModalMsg(msg, type = 'info') {
