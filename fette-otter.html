@@ -1286,7 +1286,6 @@ const MOCK_USERS = [
 // ── Normalise API or mock user into a common shape ────────────────
 function normaliseUser(raw, idx) {
   const p = PALETTE[idx % PALETTE.length];
-  // emoji / color / bg: prefer what came from the server (team roster), else palette
   return {
     id:           raw.id || idx + 1,
     name:         raw.name || raw.display_name || `User ${idx+1}`,
@@ -1309,10 +1308,11 @@ function normaliseUser(raw, idx) {
     types:        raw.types        || raw.activity_types || [],
     week:         raw.week         || raw.week_active  || [],
     weekCalories: raw.weekCalories || raw.week_calories || [],
-    garminDevice: raw.garminDevice || raw.garmin_device || 'Garmin',
+    garminDevice: raw.garminDevice || raw.garmin_device || '',
     kmByType:     raw.kmByType || {},
-    // monthly populated separately
-    monthly: raw.monthly || [],
+    monthly:      raw.monthly || [],
+    provider:     raw.provider || 'garmin',
+    picture:      raw.picture || '',
   };
 }
 
@@ -1381,22 +1381,22 @@ let currentPeriod = 'thismonth';
 async function loadData(period = 'thismonth') {
   currentPeriod = period;
 
-  // If already cached, just switch view instantly
   if (dataCache[period]) {
     applyData(dataCache[period], period, true);
     return;
   }
 
-  showBanner('⏳ Connecting to Garmin backend…', 'info');
+  showBanner('⏳ Loading data…', 'info');
 
-  // Fetch all three periods in parallel
   const periods = ['thismonth', 'lastmonth', 'ytd'];
   try {
-    const results = await Promise.all(periods.map(p =>
-      fetch(`${API_BASE}/api/team?range=${p}`, { signal: AbortSignal.timeout(30000) })
-        .then(r => r.ok ? r.json() : Promise.reject(`HTTP ${r.status}`))
-        .catch(e => null)  // don't let one failure block others
-    ));
+    const results = await Promise.all(periods.map(p => {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 30000);
+      return fetch(`${API_BASE}/api/team?range=${p}`, { signal: controller.signal })
+        .then(r => { clearTimeout(timer); return r.ok ? r.json() : Promise.reject(`HTTP ${r.status}`); })
+        .catch(e => { clearTimeout(timer); console.warn(`Period ${p} failed:`, e); return null; });
+    }));
 
     let anySuccess = false;
     periods.forEach((p, i) => {
@@ -1407,19 +1407,16 @@ async function loadData(period = 'thismonth') {
     });
 
     if (!anySuccess) throw new Error('All period fetches failed');
-
-    // Apply the requested period
     applyData(dataCache[period] || dataCache['thismonth'] || [], period, true);
 
   } catch(e) {
     console.error('Backend error:', e);
     try {
-      const h = await fetch(`${API_BASE}/api/health`, { signal: AbortSignal.timeout(10000) });
-      showBanner(h.ok ? '⚠️ Backend reachable but data fetch failed — check Railway logs' : `⚠️ Backend error — check Railway logs`, 'warning');
+      const h = await fetch(`${API_BASE}/api/health`);
+      showBanner(h.ok ? '⚠️ Backend reachable but data fetch failed — check Railway logs' : '⚠️ Backend error — check Railway logs', 'warning');
     } catch(e2) {
-      showBanner(`⚠️ Cannot reach backend (${e}) — check CORS or Railway URL`, 'warning');
+      showBanner(`⚠️ Cannot reach backend — check CORS or Railway URL`, 'warning');
     }
-    // Fall back to mock
     periods.forEach(p => { dataCache[p] = null; });
     applyMockData(period);
   }
@@ -1430,14 +1427,14 @@ function applyData(team, period, isLive) {
     if (isLive) {
       users = MOCK_USERS.map((u, i) => normaliseUser(u, i));
       users.forEach(u => { u.monthly = genMonthly(u); });
-      const liveCount = team ? team.filter(u => !u._stub).length : 0;
-      if (!team || team.length === 0) {
-        showBanner('✅ Backend connected · No members yet — click "Join Fette Otter" to add yourself!', 'live');
-      }
+      showBanner('✅ Backend connected · No members yet — click "Join Fette Otter" to add yourself!', 'live');
     }
   } else {
     users = team.map((u, i) => normaliseUser(u, i));
-    users.forEach(u => { if (!u.monthly || u.monthly.length < 12) u.monthly = genMonthly(u); });
+    // Only fill missing monthly with mock — never overwrite real data from backend
+    users.forEach(u => {
+      if (!u.monthly || u.monthly.length === 0) u.monthly = genMonthly(u);
+    });
     usingLiveData = true;
     const liveCount = team.filter(u => !u._stub).length;
     if (liveCount === team.length) {
@@ -2119,6 +2116,7 @@ function renderBadges(){
 }
 
 // ── INIT ───
+restoreSession();   // must run before loadData so admin check works in renderLB
 loadData('thismonth');
 
 // ══════════════════════════════════════════════════════════════════
@@ -2323,8 +2321,7 @@ function clearModalMsg() {
   el.textContent = '';
 }
 
-// ── Restore session on page load ──────────────────────────────────
-restoreSession();
+// ─────────────────────────────────────────────────────────────────
 </script>
 </body>
 </html>
