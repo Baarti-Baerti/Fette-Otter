@@ -310,7 +310,7 @@ def strava_auth():
 @app.get("/api/strava/callback")
 def strava_callback():
     """Strava OAuth callback — exchange code, create/update member, redirect to dashboard."""
-    DASHBOARD = "https://baarti-baerti.github.io/Fette-Otter/garmin-dashboard.html"
+    DASHBOARD = "https://baarti-baerti.github.io/Fette-Otter/fette-otter.html"
 
     error = request.args.get("error")
     if error:
