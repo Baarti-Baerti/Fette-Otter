@@ -877,7 +877,10 @@
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
           <div class="metric-tabs" id="metricTabs">
             <button class="mtab" onclick="setMetric(this,'workouts')">Workouts</button>
-            <button class="mtab active" onclick="setMetric(this,'km')">Distance</button>
+            <button class="mtab active" onclick="setMetric(this,'km')">Overall km</button>
+            <button class="mtab" onclick="setMetric(this,'runKm')">Running km</button>
+            <button class="mtab" onclick="setMetric(this,'cycleKm')">Biking km</button>
+            <button class="mtab" onclick="setMetric(this,'otherKm')">Other km</button>
             <button class="mtab" onclick="setMetric(this,'actKcal')">Act. Kcal</button>
           </div>
         </div>
@@ -1085,6 +1088,9 @@ function normaliseUser(raw, idx) {
     calories:     raw.calories     || raw.total_kcal || 0,
     workouts:     raw.workouts     || 0,
     km:           raw.km           || 0,
+    runKm:        raw.runKm        || 0,
+    cycleKm:      raw.cycleKm      || 0,
+    otherKm:      raw.otherKm      || 0,
     actKcal:      raw.actKcal      || raw.active_kcal || 0,
     bmi:          raw.bmi          || null,
     types:        raw.types        || raw.activity_types || [],
@@ -1269,16 +1275,18 @@ function renderAll(){
 
 // ════ OVERVIEW ════
 function renderLB(){
+  const kmMetrics = new Set(['km','runKm','cycleKm','otherKm']);
   const fmtVal=(u,m)=>{
-    if(m==='km') return u.km.toFixed(1)+'km';
-    if(m==='actKcal') return (u.actKcal/1000).toFixed(1)+'K';
-    return u[m];
+    if(kmMetrics.has(m)) return (u[m]||0).toFixed(1)+'km';
+    if(m==='actKcal') return ((u.actKcal||0)/1000).toFixed(1)+'K';
+    return u[m]||0;
   };
-  const units={workouts:'sessions',km:'km',actKcal:'act kcal'};
-  const sorted=[...users].sort((a,b)=>b[curMetric]-a[curMetric]);
+  const units={workouts:'sessions',km:'km',runKm:'run km',cycleKm:'bike km',otherKm:'other km',actKcal:'act kcal'};
+  const icons={km:'🗺️',runKm:'🏃',cycleKm:'🚴',otherKm:'⚡',workouts:'💪',actKcal:'🔥'};
+  const sorted=[...users].sort((a,b)=>(b[curMetric]||0)-(a[curMetric]||0));
   const max=sorted[0]?.[curMetric] || 1;
   document.getElementById('leaderboard').innerHTML=sorted.map((u,i)=>{
-    const pct=Math.round(u[curMetric]/max*100);
+    const pct=Math.round((u[curMetric]||0)/max*100);
     const rc=i===0?'top1':i===1?'top2':i===2?'top3':'';
     const ac=u.id===selUser?.id?'active-user':'';
     return`<div class="lb-row ${ac}" onclick="pickUser(${u.id})">
@@ -1289,10 +1297,10 @@ function renderLB(){
         <div class="user-sub">${u.garminDevice}</div>
         <div class="bar-wrap"><div class="bar-fill" style="width:${pct}%;background:${u.color}"></div></div>
       </div>
-      <div class="lb-metric"><div class="lb-metric-val" style="color:${u.color}">${u.workouts}</div><div class="lb-metric-lbl">sessions</div></div>
-      <div class="lb-metric"><div class="lb-metric-val">${u.km.toFixed(1)}</div><div class="lb-metric-lbl">km</div></div>
-      <div class="lb-metric"><div class="lb-metric-val">${(u.actKcal/1000).toFixed(1)}K</div><div class="lb-metric-lbl">act kcal</div></div>
-      <div class="lb-metric"><div class="lb-metric-val" style="color:${u.color}">${fmtVal(u,curMetric)}</div><div class="lb-metric-lbl">${units[curMetric]}</div></div>
+      <div class="lb-metric"><div class="lb-metric-val" style="color:${u.color}">${u.workouts||0}</div><div class="lb-metric-lbl">sessions</div></div>
+      <div class="lb-metric"><div class="lb-metric-val">🏃 ${(u.runKm||0).toFixed(1)}</div><div class="lb-metric-lbl">run km</div></div>
+      <div class="lb-metric"><div class="lb-metric-val">🚴 ${(u.cycleKm||0).toFixed(1)}</div><div class="lb-metric-lbl">bike km</div></div>
+      <div class="lb-metric"><div class="lb-metric-val" style="color:${u.color}">${icons[curMetric]} ${fmtVal(u,curMetric)}</div><div class="lb-metric-lbl">${units[curMetric]}</div></div>
     </div>`;
   }).join('');
 }
@@ -1309,20 +1317,28 @@ function renderDetail(){
   const kmByType = u.kmByType || {};
   const typeEntries = Object.entries(kmByType).sort((a,b)=>b[1]-a[1]);
   const totalKm = u.km || 0;
-  const distBreakdown = typeEntries.length > 0
-    ? typeEntries.map(([type, km]) => {
-        const pct = totalKm > 0 ? Math.round(km/totalKm*100) : 0;
+
+  // Show run / bike / other summary first, then detailed breakdown
+  const summaryRows = [
+    {label:'🏃 Running', km: u.runKm||0, color:'#818cf8'},
+    {label:'🚴 Biking',  km: u.cycleKm||0, color:'#34d399'},
+    {label:'⚡ Other',   km: u.otherKm||0, color:'#fbbf24'},
+  ].filter(r => r.km > 0);
+
+  const distBreakdown = summaryRows.length > 0
+    ? summaryRows.map(r => {
+        const pct = totalKm > 0 ? Math.round(r.km/totalKm*100) : 0;
         return `<div style="margin-bottom:8px">
           <div style="display:flex;justify-content:space-between;margin-bottom:3px">
-            <span style="font-size:.72rem;font-weight:700;color:var(--text2)">${type}</span>
-            <span style="font-size:.72rem;font-weight:800;color:${u.color}">${km}km</span>
+            <span style="font-size:.72rem;font-weight:700;color:var(--text2)">${r.label}</span>
+            <span style="font-size:.72rem;font-weight:800;color:${r.color}">${r.km}km <span style="color:var(--muted);font-weight:600">(${pct}%)</span></span>
           </div>
           <div style="height:5px;background:var(--border);border-radius:99px;overflow:hidden">
-            <div style="height:100%;width:${pct}%;background:${u.color};border-radius:99px;transition:width .6s ease"></div>
+            <div style="height:100%;width:${pct}%;background:${r.color};border-radius:99px;transition:width .6s ease"></div>
           </div>
         </div>`;
       }).join('')
-    : `<div style="font-size:.75rem;color:var(--muted);font-weight:600">${totalKm}km total</div>`;
+    : `<div style="font-size:.75rem;color:var(--muted);font-weight:600">${totalKm}km total — no activity data yet</div>`;
 
   document.getElementById('userDetail').innerHTML=`
     <div class="detail-avatar" style="background:${u.bg}">${u.picture ? `<img src="${u.picture}" style="width:100%;height:100%;border-radius:18px;object-fit:cover">` : u.emoji}</div>
