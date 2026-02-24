@@ -415,6 +415,62 @@
     background: #ede9fe;
   }
 
+  /* ── Points section ── */
+  .pts-table { width:100%; border-collapse:collapse; margin-bottom:28px; }
+  .pts-table th {
+    font-family:'Nunito',sans-serif; font-size:0.6rem; font-weight:800;
+    color:var(--muted); text-transform:uppercase; letter-spacing:.06em;
+    padding:0 10px 10px; text-align:center; white-space:nowrap;
+  }
+  .pts-table th:first-child { text-align:left; padding-left:0; }
+  .pts-table td {
+    padding:8px 10px; font-family:'Nunito',sans-serif;
+    font-size:0.8rem; font-weight:700; text-align:center;
+    border-top:1px solid var(--border);
+  }
+  .pts-table td:first-child { text-align:left; padding-left:0; }
+  .pts-table tr:hover td { background:var(--surface2); }
+  .pts-dot { display:inline-block; width:10px; height:10px; border-radius:50%; }
+  .pts-total {
+    font-family:'Nunito',sans-serif; font-size:1rem;
+    font-weight:900; color:var(--violet);
+  }
+  .pts-rule-header {
+    font-size:0.62rem; color:var(--muted); font-weight:700;
+    margin-bottom:4px;
+  }
+
+  /* ── Winners podium ── */
+  .podium-wrap {
+    display:flex; align-items:flex-end; justify-content:center;
+    gap:12px; padding:10px 0 20px;
+  }
+  .podium-place { display:flex; flex-direction:column; align-items:center; gap:6px; }
+  .podium-avatar {
+    width:52px; height:52px; border-radius:16px;
+    display:flex; align-items:center; justify-content:center;
+    font-size:1.6rem; position:relative;
+  }
+  .podium-avatar.p1 { width:64px; height:64px; border-radius:20px; font-size:2rem; }
+  .podium-crown { position:absolute; top:-14px; font-size:1.1rem; }
+  .podium-name {
+    font-family:'Nunito',sans-serif; font-weight:800;
+    font-size:0.78rem; color:var(--text);
+  }
+  .podium-pts {
+    font-family:'Nunito',sans-serif; font-weight:900;
+    font-size:0.72rem; color:var(--muted);
+  }
+  .podium-block {
+    border-radius:12px 12px 0 0;
+    display:flex; align-items:center; justify-content:center;
+    font-family:'Nunito',sans-serif; font-weight:900;
+    font-size:1.1rem; color:#fff; width:72px;
+  }
+  .podium-block.p1 { height:80px; background:linear-gradient(135deg,#f59e0b,#fbbf24); width:84px; }
+  .podium-block.p2 { height:56px; background:linear-gradient(135deg,#64748b,#94a3b8); }
+  .podium-block.p3 { height:40px; background:linear-gradient(135deg,#92400e,#b45309); }
+
   /* ── Leaderboard table ── */
   .lb-scroll { overflow-x: auto; }
   .lb-table { width: 100%; border-collapse: collapse; }
@@ -919,19 +975,6 @@
     <div class="panel">
       <div class="panel-header">
         <span class="panel-title">🏆 Leaderboard</span>
-        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-          <div class="metric-tabs" id="metricTabs">
-            <button class="mtab active" onclick="setMetric(this,'km')">Total km</button>
-            <button class="mtab" onclick="setMetric(this,'runKm')">Run km</button>
-            <button class="mtab" onclick="setMetric(this,'cycleKm')">Bike km</button>
-            <button class="mtab" onclick="setMetric(this,'virtualKm')">Virtual bike km</button>
-            <button class="mtab" onclick="setMetric(this,'skiKm')">Ski km</button>
-            <button class="mtab" onclick="setMetric(this,'swimKm')">Swim km</button>
-            <button class="mtab" onclick="setMetric(this,'walkKm')">Walking km</button>
-            <button class="mtab" onclick="setMetric(this,'workouts')">Sessions</button>
-            <button class="mtab" onclick="setMetric(this,'actKcal')">Act. Kcal</button>
-          </div>
-        </div>
       </div>
       <div id="leaderboard"></div>
     </div>
@@ -941,6 +984,15 @@
       <div class="user-detail panel" id="userDetail"></div>
     </div>
   </div><!-- end main-grid -->
+
+  <!-- ══ POINTS SECTION ══ -->
+  <div class="panel" style="margin:0 24px 24px" id="pointsPanel">
+    <div class="panel-header">
+      <span class="panel-title">🏅 Points</span>
+      <span class="panel-badge" id="pointsBadge">YTD</span>
+    </div>
+    <div id="pointsContent" style="padding:0 22px 20px"></div>
+  </div>
 
 </div><!-- end page-overview -->
 
@@ -1302,7 +1354,7 @@ function switchPage(p,btn){
 }
 
 function renderAll(){
-  renderLB(); renderDetail();
+  renderLB(); renderDetail(); renderPoints();
   setTimeout(()=>{
     document.querySelectorAll('.bar-fill,.cbar,.mc-bar-fill,.umc-bar').forEach(b=>{
       const w=b.style.width; b.style.width='0';
@@ -1364,9 +1416,6 @@ function renderLB(){
 
 function setMetricKey(k){
   curMetric = k;
-  document.querySelectorAll('.mtab').forEach(b => b.classList.remove('active'));
-  const btn = [...document.querySelectorAll('.mtab')].find(b => b.getAttribute('onclick').includes(`'${k}'`));
-  if(btn) btn.classList.add('active');
   renderLB();
 }
 
@@ -1465,16 +1514,155 @@ function renderRings(){
   }).join('');
 }
 
-function pickUser(id){ selUser=users.find(u=>u.id===id); renderLB();renderDetail();renderTypes(); }
-function setMetric(btn,m){
-  curMetric=m;
-  document.querySelectorAll('.mtab').forEach(b=>b.classList.remove('active'));
-  btn.classList.add('active');
-  renderLB();
+function pickUser(id){ selUser=users.find(u=>u.id===id); renderLB(); renderDetail(); }
+
+// ════ POINTS ════
+function renderPoints(){
+  const el = document.getElementById('pointsContent');
+  if (!el) return;
+
+  const GOAL = 66.67;  // monthly running km goal
+  const today = new Date();
+  const currentYear = today.getFullYear();
+
+  // Build per-user monthly run data from user.monthly
+  // monthly array is 12 entries newest-last, each has { year, month, runKm }
+  // We need to know which months are complete (not the current month if still ongoing)
+  const currentMonth = today.getMonth() + 1; // 1-12
+
+  // Rule A: count months in the current calendar year where runKm >= GOAL
+  // We only count months that have passed (or current month if complete)
+  const ruleAPoints = {};
+  const ruleAMonths = {}; // which months each user hit the goal
+
+  users.forEach(u => {
+    let pts = 0;
+    const hitMonths = [];
+    (u.monthly || []).forEach(m => {
+      if (!m.year || !m.month) return;
+      if (m.year !== currentYear) return;
+      // Only count months that have fully passed (not the current ongoing month)
+      if (m.month >= currentMonth) return;
+      const runKm = m.runKm || 0;
+      if (runKm >= GOAL) {
+        pts++;
+        hitMonths.push({ month: m.month, km: runKm });
+      }
+    });
+    ruleAPoints[u.id] = pts;
+    ruleAMonths[u.id] = hitMonths;
+  });
+
+  // Rule B: user with most running km YTD gets 2 points
+  // Use ytd cache data if available, else fall back to current view's runKm
+  let ytdUsers = users;
+  if (dataCache['ytd'] && Array.isArray(dataCache['ytd'])) {
+    // Map ytd runKm back to users by id
+    const ytdMap = {};
+    dataCache['ytd'].forEach(u => { ytdMap[u.id] = u.runKm || 0; });
+    ytdUsers = users.map(u => ({ ...u, ytdRunKm: ytdMap[u.id] ?? u.runKm ?? 0 }));
+  } else {
+    ytdUsers = users.map(u => ({ ...u, ytdRunKm: u.runKm || 0 }));
+  }
+  const maxYtdRun = Math.max(...ytdUsers.map(u => u.ytdRunKm));
+  const ruleBWinners = maxYtdRun > 0 ? ytdUsers.filter(u => u.ytdRunKm === maxYtdRun).map(u => u.id) : [];
+
+  // Rule C: user with most Rule A points gets 2 extra points
+  const maxRuleA = Math.max(...Object.values(ruleAPoints), 0);
+  const ruleCWinners = maxRuleA > 0 ? users.filter(u => ruleAPoints[u.id] === maxRuleA).map(u => u.id) : [];
+
+  // Total points
+  const totalPoints = {};
+  users.forEach(u => {
+    totalPoints[u.id] =
+      (ruleAPoints[u.id] || 0) +
+      (ruleBWinners.includes(u.id) ? 2 : 0) +
+      (ruleCWinners.includes(u.id) ? 2 : 0);
+  });
+
+  const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+  // Build table rows sorted by total points desc
+  const sorted = [...users].sort((a,b) => (totalPoints[b.id]||0) - (totalPoints[a.id]||0));
+
+  // Month columns for Rule A (months that have passed this year)
+  const monthCols = [];
+  for (let m = 1; m < currentMonth; m++) monthCols.push(m);
+
+  const thead = `<tr>
+    <th style="text-align:left">Athlete</th>
+    ${monthCols.map(m => `<th title="Rule A: ≥${GOAL}km running in ${MONTH_NAMES[m-1]}">${MONTH_NAMES[m-1]}</th>`).join('')}
+    <th style="color:#818cf8" title="Rule A total points">Rule A</th>
+    <th style="color:#34d399" title="Rule B: most YTD run km (+2pts)">Rule B</th>
+    <th style="color:#f472b6" title="Rule C: most Rule A points (+2pts)">Rule C</th>
+    <th style="color:var(--text);font-size:.72rem">Total 🏅</th>
+  </tr>`;
+
+  const tbody = sorted.map(u => {
+    const monthDots = monthCols.map(m => {
+      const hit = (ruleAMonths[u.id]||[]).find(x => x.month === m);
+      if (hit) return `<td title="${hit.km.toFixed(1)}km ✅"><span style="color:#059669;font-size:1rem">●</span></td>`;
+      return `<td><span style="color:#e2e8f8;font-size:1rem">●</span></td>`;
+    }).join('');
+    const ruleA = ruleAPoints[u.id] || 0;
+    const ruleB = ruleBWinners.includes(u.id) ? '+2' : '—';
+    const ruleC = ruleCWinners.includes(u.id) ? '+2' : '—';
+    const total = totalPoints[u.id] || 0;
+    return `<tr>
+      <td>
+        <div style="display:flex;align-items:center;gap:8px">
+          <div style="width:26px;height:26px;border-radius:8px;background:${u.bg};display:flex;align-items:center;justify-content:center;font-size:.85rem">${u.emoji}</div>
+          <span style="font-weight:800;font-size:.82rem">${u.name}</span>
+        </div>
+      </td>
+      ${monthDots}
+      <td style="color:#818cf8;font-weight:900">${ruleA}</td>
+      <td style="color:${ruleBWinners.includes(u.id)?'#34d399':'var(--muted)'};font-weight:${ruleBWinners.includes(u.id)?900:600}">${ruleB}</td>
+      <td style="color:${ruleCWinners.includes(u.id)?'#f472b6':'var(--muted)'};font-weight:${ruleCWinners.includes(u.id)?900:600}">${ruleC}</td>
+      <td><span class="pts-total">${total}</span></td>
+    </tr>`;
+  }).join('');
+
+  // Rules legend
+  const legend = `<div style="display:flex;gap:20px;flex-wrap:wrap;margin-bottom:20px;font-size:0.72rem;font-weight:700;color:var(--muted)">
+    <span>● = month goal hit (≥${GOAL}km running)</span>
+    <span style="color:#818cf8">Rule A: +1pt per qualifying month</span>
+    <span style="color:#34d399">Rule B: most YTD run km = +2pts</span>
+    <span style="color:#f472b6">Rule C: most Rule A pts = +2pts</span>
+  </div>`;
+
+  // Podium — top 3 by total points
+  const top3 = sorted.slice(0, 3);
+  const podiumOrder = top3.length >= 2
+    ? [top3[1], top3[0], top3[2]].filter(Boolean)  // 2nd, 1st, 3rd visual order
+    : top3;
+  const podiumClasses = top3.length >= 2 ? ['p2','p1','p3'] : ['p1','p2','p3'];
+  const podiumLabels = top3.length >= 2 ? ['🥈 2nd','🥇 1st','🥉 3rd'] : ['🥇 1st','🥈 2nd','🥉 3rd'];
+  const podiumHeights = { p1:'80px', p2:'56px', p3:'40px' };
+
+  const podiumHTML = `<div style="font-size:.65rem;color:var(--muted);font-weight:700;letter-spacing:.06em;text-transform:uppercase;margin-bottom:16px;text-align:center">🏆 Top 3</div>
+  <div class="podium-wrap">
+    ${podiumOrder.map((u, i) => {
+      const cls = podiumClasses[i];
+      const lbl = podiumLabels[i];
+      const pts = totalPoints[u.id] || 0;
+      const crown = cls === 'p1' ? '<span class="podium-crown">👑</span>' : '';
+      return `<div class="podium-place">
+        <div class="podium-avatar ${cls}" style="background:${u.bg}">${crown}${u.emoji}</div>
+        <div class="podium-name">${u.name.split(' ')[0]}</div>
+        <div class="podium-pts">${pts} pts</div>
+        <div class="podium-block ${cls}" style="height:${podiumHeights[cls]}">${lbl.split(' ')[0]}</div>
+      </div>`;
+    }).join('')}
+  </div>`;
+
+  el.innerHTML = legend +
+    `<div class="lb-scroll"><table class="pts-table"><thead>${thead}</thead><tbody>${tbody}</tbody></table></div>` +
+    (top3.length > 0 ? podiumHTML : '');
 }
 function setWeek(btn,p){
   document.querySelectorAll('.week-btn').forEach(b=>b.classList.remove('active')); btn.classList.add('active');
-  loadData(p);  // uses cache if already fetched — instant switch
+  loadData(p);
 }
 
 // ════ MONTHLY ════
