@@ -441,6 +441,11 @@
   }
   .btn-secondary:hover { background: var(--border); }
 
+  /* ── Monthly Progress Page ── */
+  .mp-charts { display: flex; flex-direction: column; gap: 20px; }
+  .mp-chart-panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px 24px 16px; }
+  .mp-chart-title { font-size: .78rem; font-weight: 900; color: var(--text2); text-transform: uppercase; letter-spacing: .07em; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+
   /* ── Provider badge ── */
   .pts-table { width:100%; border-collapse:collapse; margin-bottom:28px; }
   .pts-table th {
@@ -1049,6 +1054,7 @@
 <!-- NAV TABS -->
 <div class="nav-tabs">
   <button class="nav-tab active" onclick="switchPage('overview',this)">📊 Overview</button>
+  <button class="nav-tab" onclick="switchPage('monthly',this)">📈 Monthly Progress</button>
 </div>
 
 <!-- ══ OVERVIEW PAGE ══ -->
@@ -1080,57 +1086,16 @@
 
 </div><!-- end page-overview -->
 
-<!-- ══ MONTHLY PAGE ══ -->
+<!-- ══ MONTHLY PROGRESS PAGE ══ -->
 <div class="page" id="page-monthly">
   <div class="monthly-page">
-    <div class="month-strip" id="monthStrip"></div>
-    <div class="monthly-hero" id="monthlyHero"></div>
 
-    <div class="two-col">
-      <div class="panel">
-        <div class="panel-header"><span class="panel-title">🔥 Calories Trend</span><span class="panel-badge">12 months</span></div>
-        <div class="chart-area">
-          <svg id="calChart" class="trend-svg" width="100%" height="160" viewBox="0 0 500 160" preserveAspectRatio="none"></svg>
-          <div class="chart-legend" id="calLegend"></div>
-        </div>
-      </div>
-      <div class="panel">
-        <div class="panel-header"><span class="panel-title">🗺️ Distance Trend</span><span class="panel-badge">12 months</span></div>
-        <div class="chart-area">
-          <svg id="sessChart" class="trend-svg" width="100%" height="160" viewBox="0 0 500 160" preserveAspectRatio="none"></svg>
-          <div class="chart-legend" id="sessLegend"></div>
-        </div>
-      </div>
-    </div>
+    <!-- User selector row -->
+    <div id="mpUserRow" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:24px;align-items:center"></div>
 
-    <div class="panel" style="margin-bottom:22px">
-      <div class="panel-header">
-        <span class="panel-title" id="cardsTitle">👥 Athlete Breakdown</span>
-        <span class="panel-badge">Click to focus</span>
-      </div>
-      <div class="user-month-cards" id="userCards"></div>
-    </div>
+    <!-- Metric charts: one per metric -->
+    <div class="mp-charts" id="mpCharts"></div>
 
-    <div class="two-col">
-      <div class="panel">
-        <div class="panel-header"><span class="panel-title">📊 Month Comparison</span><span class="panel-badge" id="compareMonth"></span></div>
-        <div class="month-compare" id="monthCompare"></div>
-      </div>
-      <div class="panel">
-        <div class="panel-header"><span class="panel-title" id="yearTitle">📈 Year at a Glance</span><span class="panel-badge" id="yearBadge"></span></div>
-        <div class="year-hm-wrap"><div class="year-hm-grid" id="yearGrid"></div></div>
-      </div>
-    </div>
-
-    <div class="panel" style="margin-bottom:22px">
-      <div class="panel-header"><span class="panel-title" id="hmTitle">📅 Daily Activity Heatmap</span><span class="panel-badge" id="hmBadge"></span></div>
-      <div class="heatmap-grid" id="hmGrid"></div>
-    </div>
-
-    <div class="panel">
-      <div class="panel-header"><span class="panel-title">🎖️ Monthly Achievements</span><span class="panel-badge" id="achieveBadge"></span></div>
-      <div class="badge-row" id="badgeRow"></div>
-    </div>
   </div>
 </div>
 
@@ -1444,7 +1409,7 @@ function applyData(team, period, isLive) {
     }
   }
   selUser = users[0];
-  selMoUser = users[0];
+  if (!selMoUser) selMoUser = users[0];
   if (users[0]?.monthly?.length) selMonth = users[0].monthly.length - 1;
   renderAll();
 }
@@ -1453,8 +1418,7 @@ function applyMockData(period) {
   users = MOCK_USERS.map((u, i) => normaliseUser(u, i));
   users.forEach(u => { u.monthly = genMonthly(u); });
   selUser = users[0];
-  selMoUser = users[0];
-  usingLiveData = false;
+  if (!selMoUser) selMoUser = users[0];
   showBanner('⚠️ Backend offline — showing demo data', 'warning');
   renderAll();
 }
@@ -1530,7 +1494,7 @@ function renderLB(){
         <div class="lb-user-cell">
           <span class="lb-rank ${rc}">${i+1}</span>
           <div class="lb-avatar-sm" style="background:${u.bg}">${u.picture?`<img src="${u.picture}" style="width:100%;height:100%;border-radius:9px;object-fit:cover">`:u.emoji}</div>
-          <div><div class="lb-name">${u.name}${providerBadge}</div><div class="lb-device">${u.garminDevice||''}</div></div>
+          <div><div class="lb-name">${u.name}${providerBadge}</div></div>
         </div>
       </td>
       ${cells}
@@ -1592,7 +1556,7 @@ function renderDetail(){
   document.getElementById('userDetail').innerHTML=`
     <div class="detail-avatar" style="background:${u.bg}">${u.picture ? `<img src="${u.picture}" style="width:100%;height:100%;border-radius:18px;object-fit:cover">` : u.emoji}</div>
     <div class="detail-name">${u.name}${provBadge}</div>
-    <div class="detail-role">Rank #${rank} · ${deviceLabel}</div>
+    <div class="detail-role">Rank #${rank}</div>
     <div class="detail-grid">
       <div class="detail-item"><div class="detail-item-lbl">Sessions</div><div class="detail-item-val" style="color:${u.color}">${u.workouts}</div></div>
       <div class="detail-item"><div class="detail-item-lbl">Distance</div><div class="detail-item-val">${u.km}<span style="font-size:.9rem">km</span></div></div>
@@ -1613,15 +1577,19 @@ function renderTypes(){
 function renderCalChart(){
   const sorted=[...users].sort((a,b)=>b.calories-a.calories);
   const mx=sorted[0].calories;
-  document.getElementById('calorieChart').innerHTML=sorted.map(u=>`
-    <div class="compare-row">
-      <div class="cname">${u.emoji} ${u.name.split(' ')[0]}</div>
+  document.getElementById('calorieChart').innerHTML=sorted.map(u=>{
+    const avatar = u.picture
+      ? `<img src="${u.picture}" style="width:18px;height:18px;border-radius:5px;object-fit:cover;vertical-align:middle;margin-right:5px">`
+      : `<span style="margin-right:4px">${u.emoji}</span>`;
+    return `<div class="compare-row">
+      <div class="cname">${avatar}${u.name.split(' ')[0]}</div>
       <div>
         <div class="cbar-wrap" style="margin-bottom:3px"><div class="cbar" style="width:${(u.calories/mx*100).toFixed(1)}%;background:${u.color}"></div></div>
         <div class="cbar-wrap"><div class="cbar" style="width:${(u.actKcal/mx*100).toFixed(1)}%;background:${u.color}55"></div></div>
       </div>
       <div class="cval">${u.calories.toLocaleString()}<br><span style="color:${u.color};font-size:.62rem">${u.actKcal.toLocaleString()}</span></div>
-    </div>`).join('')+
+    </div>`;
+  }).join('') +
     `<div style="display:flex;gap:14px;margin-top:10px;font-size:0.62rem;color:var(--muted);font-weight:600;padding-top:8px;border-top:1px solid var(--border)">
       <span>■ Total Calories</span><span style="opacity:0.55">■ Activity Kcal</span>
     </div>`;
@@ -1632,6 +1600,9 @@ function renderRings(){
   const sz=64,st=7,r=(sz-st)/2,circ=2*Math.PI*r;
   document.getElementById('ringsContainer').innerHTML=users.map(u=>{
     const off=circ*(1-u.km/mxKm);
+    const nameAvatar = u.picture
+      ? `<img src="${u.picture}" style="width:16px;height:16px;border-radius:4px;object-fit:cover;vertical-align:middle;margin-right:3px">`
+      : `<span style="margin-right:2px">${u.emoji}</span>`;
     return`<div class="ring-item">
       <svg class="ring-svg" width="${sz}" height="${sz}" viewBox="0 0 ${sz} ${sz}">
         <circle cx="${sz/2}" cy="${sz/2}" r="${r}" fill="none" stroke="#e2e8f8" stroke-width="${st}"/>
@@ -1640,7 +1611,7 @@ function renderRings(){
         <text x="50%" y="44%" text-anchor="middle" dominant-baseline="central" fill="${u.color}" font-family="Nunito" font-size="12" font-weight="900">${u.km}</text>
         <text x="50%" y="68%" text-anchor="middle" dominant-baseline="central" fill="#94a3b8" font-family="Nunito" font-size="7" font-weight="700">km</text>
       </svg>
-      <div class="ring-name">${u.emoji} ${u.name.split(' ')[0]}</div>
+      <div class="ring-name">${nameAvatar}${u.name.split(' ')[0]}</div>
       <div class="ring-val">${u.workouts} sessions</div>
     </div>`;
   }).join('');
@@ -1827,7 +1798,7 @@ function renderPoints(){
     return `<tr>
       <td>
         <div style="display:flex;align-items:center;gap:7px">
-          <div style="width:24px;height:24px;border-radius:7px;background:${u.bg};display:flex;align-items:center;justify-content:center;font-size:.8rem;flex-shrink:0">${u.emoji}</div>
+          <div style="width:24px;height:24px;border-radius:7px;background:${u.bg};display:flex;align-items:center;justify-content:center;font-size:.8rem;flex-shrink:0;overflow:hidden">${u.picture?`<img src="${u.picture}" style="width:100%;height:100%;object-fit:cover;border-radius:7px">`:u.emoji}</div>
           <span style="font-weight:800;font-size:.8rem">${u.name}</span>
         </div>
       </td>
@@ -1862,7 +1833,7 @@ function renderPoints(){
       const pts = totalPoints[u.id] || 0;
       const crown = cls === 'p1' ? '<span class="podium-crown">👑</span>' : '';
       return `<div class="podium-place">
-        <div class="podium-avatar ${cls}" style="background:${u.bg}">${crown}${u.emoji}</div>
+        <div class="podium-avatar ${cls}" style="background:${u.bg}">${crown}${u.picture?`<img src="${u.picture}" style="width:100%;height:100%;object-fit:cover;border-radius:inherit">`:u.emoji}</div>
         <div class="podium-name">${u.name.split(' ')[0]}</div>
         <div class="podium-pts">${pts} pts</div>
         <div class="podium-block ${cls}" style="height:${podiumHeights[cls]}">${podiumMedals[cls]}</div>
@@ -1879,244 +1850,113 @@ function setWeek(btn,p){
   loadData(p);
 }
 
-// ════ MONTHLY ════
-// Month labels come from the data itself (label, year, month fields)
-function monthLabels() {
-  if (!users[0] || !users[0].monthly.length) return [];
-  return users[0].monthly.map(m => m.label);
-}
-function monthFullLabel(mi) {
-  if (!users[0] || !users[0].monthly[mi]) return '';
-  const m = users[0].monthly[mi];
-  return new Date(m.year, m.month - 1, 1).toLocaleString('en', {month:'long'});
-}
-function monthYear(mi) {
-  if (!users[0] || !users[0].monthly[mi]) return '';
-  const m = users[0].monthly[mi];
-  return `${m.label} ${m.year}`;
-}
+// ════ MONTHLY PROGRESS — SVG line charts, one per metric ════
+const MP_METRICS = [
+  { key: 'km',      label: '🗺️ Total Distance',   unit: 'km',   axFmt: v => v.toFixed(0),          valFmt: v => v.toFixed(1) + ' km',         field: m => m.km      || 0 },
+  { key: 'runKm',   label: '🏃 Running Distance',  unit: 'km',   axFmt: v => v.toFixed(0),          valFmt: v => v.toFixed(1) + ' km',         field: m => m.runKm   || 0 },
+  { key: 'sess',    label: '💪 Sessions',           unit: '',     axFmt: v => Math.round(v),         valFmt: v => Math.round(v) + ' sessions',  field: m => m.sess    || 0 },
+  { key: 'actKcal', label: '⚡ Active Calories',    unit: 'kcal', axFmt: v => (v/1000).toFixed(0)+'K', valFmt: v => (v/1000).toFixed(1) + 'K', field: m => m.actKcal || 0 },
+];
 
-function renderMonthly(){
-  if(!users[0] || !users[0].monthly.length){
-    document.getElementById('monthlyHero').innerHTML='<div style="padding:40px;text-align:center;color:var(--muted)">Loading monthly data…</div>';
+const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+function renderMonthly() {
+  if (!users[0] || !users[0].monthly || !users[0].monthly.length) {
+    document.getElementById('mpCharts').innerHTML = '<div style="padding:40px;text-align:center;color:var(--muted);font-weight:700">Loading monthly data…</div>';
     return;
   }
-  renderStrip();renderMHero();renderTrends();
-  renderCards();renderCompare();renderYear();renderHeatmap();renderBadges();
-}
 
-function renderStrip(){
-  const labels = monthLabels();
-  document.getElementById('monthStrip').innerHTML = labels.map((lbl,i) => {
-    const yr = users[0].monthly[i].year;
-    return `<button class="month-pill ${i===selMonth?'active':''}" onclick="pickMonth(${i})">${lbl} ${yr}</button>`;
-  }).join('');
-}
+  const months = users[0].monthly; // 12 entries
+  const nM = months.length;
 
-function pickMonth(i){
-  selMonth=i; renderStrip();renderMHero();renderTrends();
-  renderCards();renderCompare();renderYear();renderHeatmap();renderBadges();
-}
-function pickMoUser(id){
-  selMoUser=users.find(u=>u.id===id);
-  renderCards();renderYear();renderHeatmap();renderBadges();
-}
+  // Month labels from data
+  const xLabels = months.map(m =>
+    (m.year && m.month) ? MONTH_NAMES[m.month - 1] : (m.label || '?')
+  );
 
-function renderMHero(){
-  const mi=selMonth;
-  if(!users[0]||!users[0].monthly[mi]) return;
-  const tCal=users.reduce((a,u)=>a+(u.monthly[mi]?.cal||0),0);
-  const tSess=users.reduce((a,u)=>a+(u.monthly[mi]?.sess||0),0);
-  const tKm=users.reduce((a,u)=>a+(u.monthly[mi]?.km||0),0).toFixed(0);
-  const tActKcal=users.reduce((a,u)=>a+(u.monthly[mi]?.actKcal||0),0);
-  const prev=mi===0?0:mi-1;
-  const pCal=users.reduce((a,u)=>a+(u.monthly[prev]?.cal||0),0);
-  const dlt=mi===0?0:Math.round((tCal-pCal)/pCal*100);
-  const mn=monthFullLabel(mi);
-  const top=[...users].sort((a,b)=>(b.monthly[mi]?.cal||0)-(a.monthly[mi]?.cal||0))[0];
-  const cards=[
-    {icon:'🔥',l:'Team Calories',v:(tCal/1000).toFixed(0)+'K',s:`Total — ${mn}`,d:(dlt>=0?'+':'')+dlt+'% vs prev',up:dlt>=0,c:'s-violet'},
-    {icon:'💪',l:'Total Sessions',v:tSess,s:'combined this month',d:`${(tSess/users.length).toFixed(1)} avg/athlete`,up:true,c:'s-pink'},
-    {icon:'🗺️',l:'Team Distance',v:tKm+'km',s:'combined kilometres',d:`${(+tKm/users.length).toFixed(0)}km avg/athlete`,up:true,c:'s-sky'},
-    {icon:'⚡',l:'Activity Kcal',v:(tActKcal/1000).toFixed(0)+'K',s:'activity calories total',d:top.emoji+' '+top.name.split(' ')[0]+' leads',up:true,c:'s-mint'},
-  ];
-  document.getElementById('monthlyHero').innerHTML=cards.map((c,i)=>`
-    <div class="mhero-card ${c.c} fade-in" style="animation-delay:${i*0.07}s">
-      <div class="mhero-icon">${c.icon}</div>
-      <div class="stat-label">${c.l}</div>
-      <div class="stat-value">${c.v}</div>
-      <div class="stat-sub">${c.s}</div>
-      <span class="stat-delta ${c.up?'delta-up':'delta-down'}">${c.up?'↑':'↓'} ${c.d}</span>
-    </div>`).join('');
-}
+  // Legend row (all users)
+  const legend = `<div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:6px;padding:12px 20px 0">
+    ${users.map(u => {
+      const dot = `<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${u.color};margin-right:5px;vertical-align:middle;flex-shrink:0"></span>`;
+      const pic = u.picture
+        ? `<img src="${u.picture}" style="width:18px;height:18px;border-radius:5px;object-fit:cover;margin-right:5px;vertical-align:middle;flex-shrink:0">`
+        : `<span style="margin-right:4px;font-size:.8rem">${u.emoji}</span>`;
+      return `<span style="display:inline-flex;align-items:center;font-size:.72rem;font-weight:800;color:var(--text2)">${pic}${dot}${u.name.split(' ')[0]}</span>`;
+    }).join('')}
+  </div>`;
 
-function renderTrends(){
-  const labels = monthLabels();
-  drawLine('calChart','calLegend', u=>u.monthly.map(m=>m.cal||0), v=>(v/1000).toFixed(0)+'K', labels);
-  drawLine('sessChart','sessLegend', u=>u.monthly.map(m=>m.km||0), v=>v.toFixed(0)+'km', labels);
-}
+  // Build one SVG chart per metric
+  const charts = MP_METRICS.map(metric => {
+    const W = 560, H = 200, pL = 44, pR = 16, pT = 14, pB = 28;
+    const iW = W - pL - pR, iH = H - pT - pB;
 
-function drawLine(svgId,legId,dataFn,fmt,labels){
-  if(!users[0]||!users[0].monthly.length) return;
-  const W=500,H=160,pL=34,pR=8,pT=10,pB=22;
-  const iW=W-pL-pR, iH=H-pT-pB;
-  const nMonths = labels.length;
-  const allV=users.flatMap(u=>dataFn(u));
-  const minV=Math.min(...allV)*0.88, maxV=Math.max(...allV)*1.06||1;
-  const xS=i=>pL+i*(iW/(Math.max(nMonths-1,1)));
-  const yS=v=>pT+iH*(1-(v-minV)/(maxV-minV));
-  let out='';
-  [0,.33,.66,1].forEach(t=>{
-    const y=pT+t*iH, v=maxV-t*(maxV-minV);
-    out+=`<line class="grid-line" x1="${pL}" y1="${y}" x2="${W-pR}" y2="${y}"/>`;
-    out+=`<text class="axis-label" x="${pL-4}" y="${y+4}" text-anchor="end">${fmt(v)}</text>`;
-  });
-  labels.forEach((m,i)=>{ out+=`<text class="axis-label" x="${xS(i)}" y="${H-2}" text-anchor="middle">${m}</text>`; });
-  const sx=xS(selMonth);
-  out+=`<line x1="${sx}" y1="${pT}" x2="${sx}" y2="${pT+iH}" stroke="#818cf8" stroke-width="1.5" stroke-dasharray="4,3" opacity="0.7"/>`;
-  const top5=[...users].sort((a,b)=>{const avg=u=>dataFn(u).reduce((s,v)=>s+v,0)/nMonths; return avg(b)-avg(a);}).slice(0,5);
-  top5.forEach(u=>{
-    const vs=dataFn(u);
-    const ap=[`${xS(0)},${pT+iH}`, ...vs.map((v,i)=>`${xS(i)},${yS(v)}`), `${xS(nMonths-1)},${pT+iH}`].join(' ');
-    out+=`<polygon points="${ap}" fill="${u.color}" opacity="0.07"/>`;
-  });
-  top5.forEach(u=>{
-    const vs=dataFn(u);
-    const pts=vs.map((v,i)=>`${xS(i)},${yS(v)}`).join(' ');
-    out+=`<polyline points="${pts}" fill="none" stroke="${u.color}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.9"/>`;
-    out+=`<circle cx="${xS(selMonth)}" cy="${yS(vs[selMonth]||0)}" r="4.5" fill="${u.color}" stroke="#fff" stroke-width="2"/>`;
-  });
-  document.getElementById(svgId).innerHTML=out;
-  document.getElementById(legId).innerHTML=top5.map(u=>`
-    <div class="legend-item"><div class="legend-dot" style="background:${u.color}"></div>${u.emoji} ${u.name.split(' ')[0]}</div>`).join('');
-}
+    // Collect all values to determine Y scale
+    const allVals = users.flatMap(u => months.map((_, mi) => metric.field(u.monthly[mi] || {})));
+    const maxV = Math.max(...allVals, 1);
+    const minV = 0;
 
-function renderCards(){
-  const mi=selMonth;
-  if(!users[0]||!users[0].monthly[mi]) return;
-  const mx=Math.max(...users.map(u=>u.monthly[mi]?.cal||0));
-  document.getElementById('cardsTitle').textContent=`👥 Athlete Breakdown — ${monthFullLabel(mi)}`;
-  document.getElementById('userCards').innerHTML=users.map(u=>{
-    const d=u.monthly[mi];
-    const pct=(d.cal/mx*100).toFixed(1);
-    const sel=u.id===selMoUser.id?'selected-card':'';
-    const bmiColor=d.bmi<25?'#059669':d.bmi<30?'#d97706':'#dc2626';
-    const bmiCat=d.bmi<18.5?'Under':d.bmi<25?'Healthy':d.bmi<30?'Over':'Obese';
-    return`<div class="user-month-card ${sel}" onclick="pickMoUser(${u.id})">
-      <div class="umc-top">
-        <div class="umc-avatar" style="background:${u.bg}">${u.emoji}</div>
-        <div><div class="umc-name">${u.name.split(' ')[0]}</div><div class="umc-role">${u.role}</div></div>
+    const xPos = i => pL + (i / Math.max(nM - 1, 1)) * iW;
+    const yPos = v => pT + iH * (1 - (v - minV) / (maxV - minV));
+
+    let svg = '';
+
+    // Grid lines + Y axis labels (4 lines)
+    const yTicks = [0, 0.25, 0.5, 0.75, 1.0];
+    yTicks.forEach(t => {
+      const v = minV + t * (maxV - minV);
+      const y = yPos(v);
+      svg += `<line x1="${pL}" y1="${y}" x2="${W - pR}" y2="${y}" stroke="#e2e8f8" stroke-width="1"/>`;
+      svg += `<text x="${pL - 5}" y="${y + 4}" text-anchor="end" font-family="Nunito,sans-serif" font-size="9" fill="#94a3b8" font-weight="700">${metric.axFmt(v)}</text>`;
+    });
+
+    // X axis labels
+    xLabels.forEach((lbl, i) => {
+      svg += `<text x="${xPos(i)}" y="${H - 4}" text-anchor="middle" font-family="Nunito,sans-serif" font-size="9" fill="#94a3b8" font-weight="700">${lbl}</text>`;
+    });
+
+    // Per-user lines + dots
+    users.forEach(u => {
+      const vals = months.map((_, mi) => metric.field(u.monthly[mi] || {}));
+
+      // Filled area under the line
+      const areaPoints = [
+        `${xPos(0)},${pT + iH}`,
+        ...vals.map((v, i) => `${xPos(i)},${yPos(v)}`),
+        `${xPos(nM - 1)},${pT + iH}`,
+      ].join(' ');
+      svg += `<polygon points="${areaPoints}" fill="${u.color}" opacity="0.06"/>`;
+
+      // Line
+      const linePoints = vals.map((v, i) => `${xPos(i)},${yPos(v)}`).join(' ');
+      svg += `<polyline points="${linePoints}" fill="none" stroke="${u.color}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" opacity="0.95"/>`;
+
+      // Dots with tooltip title
+      vals.forEach((v, i) => {
+        const lbl = xLabels[i];
+        svg += `<circle cx="${xPos(i)}" cy="${yPos(v)}" r="3.5" fill="${u.color}" stroke="#fff" stroke-width="1.5">
+          <title>${u.name.split(' ')[0]} · ${lbl}: ${metric.valFmt(v)}</title>
+        </circle>`;
+      });
+    });
+
+    return `<div class="mp-chart-panel">
+      <div class="mp-chart-title">${metric.label}</div>
+      <div style="overflow-x:auto">
+        <svg width="100%" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" style="display:block;min-width:320px">${svg}</svg>
       </div>
-      <div class="umc-stats">
-        <div><div class="umc-stat-val" style="color:${u.color}">${(d.cal/1000).toFixed(1)}K</div><div class="umc-stat-lbl">Calories</div></div>
-        <div><div class="umc-stat-val" style="color:${u.color}">${d.sess}</div><div class="umc-stat-lbl">Sessions</div></div>
-        <div style="margin-top:7px"><div class="umc-stat-val">${d.km.toFixed(0)}<span style="font-size:.8rem">km</span></div><div class="umc-stat-lbl">Distance</div></div>
-        <div style="margin-top:7px"><div class="umc-stat-val">${(d.actKcal/1000).toFixed(1)}K</div><div class="umc-stat-lbl">Act. Kcal</div></div>
-      </div>
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-top:10px">
-        <span style="font-size:0.68rem;color:var(--muted);font-weight:700">BMI ${d.bmi}</span>
-        <span style="font-family:'Nunito',sans-serif;font-weight:700;font-size:0.62rem;padding:2px 8px;border-radius:20px;background:${bmiColor}18;color:${bmiColor}">${bmiCat}</span>
-      </div>
-      <div class="umc-bar-wrap" style="margin-top:8px"><div class="umc-bar" style="width:${pct}%;background:${u.color}"></div></div>
     </div>`;
   }).join('');
+
+  document.getElementById('mpUserRow').innerHTML = '';   // no user filter needed — all lines visible
+  document.getElementById('mpCharts').innerHTML = legend + charts;
 }
 
-function renderCompare(){
-  const mi=selMonth;
-  if(!users[0]||!users[0].monthly[mi]) return;
-  const sorted=[...users].sort((a,b)=>(b.monthly[mi]?.cal||0)-(a.monthly[mi]?.cal||0));
-  const mx=sorted[0].monthly[mi]?.cal||1;
-  document.getElementById('compareMonth').textContent=monthYear(mi);
-  document.getElementById('monthCompare').innerHTML=sorted.map(u=>{
-    const d=u.monthly[mi];
-    const bmiColor=d.bmi<25?'#059669':d.bmi<30?'#d97706':'#dc2626';
-    return`<div class="mc-row">
-      <div class="mc-header">
-        <div class="mc-name">${u.emoji} ${u.name}</div>
-        <div class="mc-vals">
-          <span style="color:${u.color};font-weight:800">${(d.cal/1000).toFixed(1)}K kcal</span>
-          <span>${d.km.toFixed(0)}km</span>
-          <span>${(d.actKcal/1000).toFixed(1)}K act</span>
-          <span style="color:${bmiColor}">BMI ${d.bmi}</span>
-        </div>
-      </div>
-      <div class="mc-bar-track"><div class="mc-bar-fill" style="width:${(d.cal/mx*100).toFixed(1)}%;background:${u.color}"></div></div>
-    </div>`;
-  }).join('');
+function pickMpUser(id) {
+  selMoUser = id ? users.find(u => u.id === id) : null;
+  renderMonthly();
 }
 
-function renderYear(){
-  const u=selMoUser;
-  if(!u.monthly||!u.monthly.length) return;
-  const mx=Math.max(...u.monthly.map(m=>m.cal||0))||1;
-  document.getElementById('yearTitle').textContent=`📈 ${u.name.split(' ')[0]}'s Year`;
-  document.getElementById('yearBadge').textContent=u.garminDevice;
-  document.getElementById('yearGrid').innerHTML=u.monthly.map((m,mi)=>{
-    const h=Math.round((m.cal/mx)*80);
-    const sel=mi===selMonth;
-    const lbl=m.label||'';
-    const fullLbl=m.year&&m.month ? new Date(m.year,m.month-1,1).toLocaleString('en',{month:'long'})+' '+m.year : lbl;
-    return`<div class="month-col" onclick="pickMonth(${mi})">
-      <div class="month-col-label">${lbl}</div>
-      <div class="month-col-bar-wrap">
-        <div class="month-col-bar" style="height:${h}px;background:${u.color};opacity:${sel?1:0.45};${sel?`box-shadow:0 0 0 2px ${u.color}44;`:''}" title="${fullLbl}: ${((m.cal||0)/1000).toFixed(1)}K kcal"></div>
-      </div>
-      <div class="month-col-val" style="${sel?`color:${u.color};font-weight:800`:''}">${((m.cal||0)/1000).toFixed(0)}K</div>
-    </div>`;
-  }).join('');
-}
 
-function renderHeatmap(){
-  const u=selMoUser, mi=selMonth;
-  if(!u.monthly||!u.monthly[mi]) return;
-  const m=u.monthly[mi];
-  const dailyData=m.days||[];
-  const mx=Math.max(...dailyData.filter(d=>d>0),1);
-  const active=dailyData.filter(d=>d>0).length;
-  const fullLbl=m.year&&m.month ? new Date(m.year,m.month-1,1).toLocaleString('en',{month:'long',year:'numeric'}) : (m.label||'');
-  document.getElementById('hmTitle').textContent=`📅 ${u.name.split(' ')[0]}'s Daily Activity — ${fullLbl}`;
-  document.getElementById('hmBadge').textContent=`${active} active days`;
-  let cells=DAYS.map(d=>`<div class="hm-cell"><span style="font-weight:800;color:var(--muted)">${d}</span></div>`).join('');
-  dailyData.forEach((cal,i)=>{
-    if(!cal){
-      cells+=`<div class="hm-cell" style="background:var(--bg2)"><span class="hm-day-num" style="color:var(--muted)">${i+1}</span></div>`;
-    } else {
-      const t=cal/mx;
-      const alpha=Math.round(30+t*200).toString(16).padStart(2,'0');
-      const dark=t>0.6;
-      cells+=`<div class="hm-cell" style="background:${u.color}${alpha}" title="Day ${i+1}: ${cal} kcal">
-        <span class="hm-day-num" style="color:${dark?'#fff':'var(--text)'}">${i+1}</span>
-        <span style="font-size:.5rem;color:${dark?'rgba(255,255,255,0.8)':'var(--muted)'};font-weight:700">${(cal/1000).toFixed(1)}k</span>
-      </div>`;
-    }
-  });
-  document.getElementById('hmGrid').innerHTML=cells;
-}
-
-function renderBadges(){
-  const mi=selMonth, u=selMoUser;
-  if(!u.monthly||!u.monthly[mi]) return;
-  const d=u.monthly[mi];
-  const rank=[...users].sort((a,b)=>(b.monthly[mi]?.cal||0)-(a.monthly[mi]?.cal||0)).findIndex(x=>x.id===u.id)+1;
-  const lbl=d.label||'';
-  const bs=[];
-  if(rank===1) bs.push({i:'🥇',n:'Top Performer',d:`#1 in ${lbl}`});
-  if(rank<=3&&rank>1) bs.push({i:'🏆',n:'Podium Finish',d:'Top 3 this month'});
-  if((d.sess||0)>=20) bs.push({i:'🔥',n:'On Fire',d:`${d.sess} sessions`});
-  if((d.cal||0)>55000) bs.push({i:'⚡',n:'Calorie Crusher',d:`${((d.cal||0)/1000).toFixed(0)}K kcal`});
-  if((d.km||0)>=200) bs.push({i:'🗺️',n:'Distance King',d:`${(d.km||0).toFixed(0)}km this month`});
-  if((d.actKcal||0)>30000) bs.push({i:'💪',n:'Activity Beast',d:`${((d.actKcal||0)/1000).toFixed(0)}K act kcal`});
-  if(d.bmi&&d.bmi<23) bs.push({i:'⚖️',n:'Lean Machine',d:`BMI ${d.bmi} — excellent`});
-  if(u.types.includes('Running')) bs.push({i:'🏃',n:'Road Warrior',d:'Running sessions'});
-  if(u.types.includes('Cycling')) bs.push({i:'🚴',n:'Cyclist',d:'Riding km'});
-  if(u.types.includes('Swimming')) bs.push({i:'🏊',n:'Swimmer',d:'Pool sessions'});
-  if(u.types.includes('HIIT')||u.types.includes('Hiit')) bs.push({i:'💥',n:'HIIT Hero',d:'High intensity'});
-  if(bs.length===0) bs.push({i:'🚶',n:'Keep Moving',d:'Every km counts'});
-  document.getElementById('achieveBadge').textContent=`${u.emoji} ${u.name.split(' ')[0]} · ${lbl}`;
-  document.getElementById('badgeRow').innerHTML=bs.map(b=>`
-    <div class="badge"><span class="badge-icon">${b.i}</span><div><div class="badge-name">${b.n}</div><div class="badge-desc">${b.d}</div></div></div>`).join('');
-}
 
 // ── INIT ───
 restoreSession();   // must run before loadData so admin check works in renderLB
