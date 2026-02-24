@@ -190,6 +190,8 @@ def build_month_summary(
         days.append(sum(a["active_kcal"] for a in day_acts))
 
     return {
+        "year":     year,
+        "month":    month,
         "cal":      cal,
         "sess":     sess,
         "km":       km,
