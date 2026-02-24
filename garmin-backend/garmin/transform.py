@@ -176,6 +176,7 @@ def build_month_summary(
     sess   = len(norms)
     km     = _km(sum(a["distance_m"] for a in norms))
     actKcal= sum(a["active_kcal"] for a in norms)
+    runKm  = _km(sum(a["distance_m"] for a in norms if a["type"] == "Running"))
 
     # Build 28-day array (we cap at 28 for display uniformity)
     _, last_day = calendar.monthrange(year, month)
@@ -192,6 +193,7 @@ def build_month_summary(
         "cal":      cal,
         "sess":     sess,
         "km":       km,
+        "runKm":    runKm,
         "actKcal":  actKcal,
         "bmi":      round(bmi, 1) if bmi else None,
         "days":     days,
