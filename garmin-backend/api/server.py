@@ -12,20 +12,17 @@ from typing import Any
 from pathlib import Path
 
 # ── Path setup — must happen before any local imports ────────────────────────
-# /app/
-#   wsgi.py
-#   api/server.py   ← this file
-#   garmin/
-#   token_export.py
 _HERE = Path(__file__).resolve().parent        # /app/api
 _ROOT = _HERE.parent                            # /app
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
-from flask import Flask, jsonify, request, abort
+from flask import Flask, jsonify, request, abort, redirect
 from flask_cors import CORS
 from garth.exc import GarthException, GarthHTTPError
 import garmin as g
+from garmin import strava as sv
+from garmin.transform import build_user_payload, build_week_summary, build_month_summary, _normalise_activity
 
 logging.basicConfig(
     level=logging.INFO,
@@ -95,6 +92,13 @@ def verify_google_id_token(id_token: str) -> dict[str, Any]:
 
 
 def load_user_data(member: dict[str, Any], range_days: int) -> dict[str, Any] | None:
+    """Route to correct fetcher based on provider field."""
+    if member.get("provider") == "strava":
+        return load_strava_user_data(member, range_days)
+    return load_garmin_user_data(member, range_days)
+
+
+def load_garmin_user_data(member: dict[str, Any], range_days: int) -> dict[str, Any] | None:
     uid = member["id"]
     try:
         client = g.get_client(uid)
@@ -150,21 +154,196 @@ def load_user_data(member: dict[str, Any], range_days: int) -> dict[str, Any] | 
         return None
 
 
+def load_strava_user_data(member: dict[str, Any], range_days: int) -> dict[str, Any] | None:
+    """Load activity data for a Strava-connected member."""
+    uid = member["id"]
+    if not sv.is_authenticated(uid):
+        log.warning("Strava user %s has no token", uid)
+        return None
+    try:
+        today = date.today()
+        start = today - timedelta(days=range_days - 1)
+
+        # Fetch current period activities (already normalised)
+        period_acts = sv.fetch_and_normalise(uid, start, today)
+
+        # Build week flags from last 7 days for the activity dots
+        week_start = today - timedelta(days=6)
+        week_dates = [(week_start + timedelta(days=i)).isoformat() for i in range(7)]
+        day_flags = [1 if any(a["date"] == d for a in period_acts) else 0 for d in week_dates]
+        day_cals  = [sum(a["active_kcal"] for a in period_acts if a["date"] == d) for d in week_dates]
+
+        from garmin.transform import _km, _split_km, _km_by_type
+        split = _split_km(period_acts)
+        week = {
+            "calories":     sum(a["calories"]   for a in period_acts),
+            "workouts":     len(period_acts),
+            "km":           _km(sum(a["distance_m"] for a in period_acts)),
+            "actKcal":      sum(a["active_kcal"] for a in period_acts),
+            "week":         day_flags,
+            "weekCalories": day_cals,
+            "kmByType":     _km_by_type(period_acts),
+            **split,
+        }
+
+        # Monthly data — 12 months
+        months_keys: list[tuple[int, int]] = []
+        for i in range(11, -1, -1):
+            m_date = date(today.year, today.month, 1) - timedelta(days=30 * i)
+            months_keys.append((m_date.year, m_date.month))
+
+        def _fetch_month_strava(yr: int, mo: int):
+            import calendar
+            _, last_day = calendar.monthrange(yr, mo)
+            m_start = date(yr, mo, 1)
+            m_end   = date(yr, mo, last_day)
+            acts = sv.fetch_and_normalise(uid, m_start, m_end)
+            return f"{yr}-{mo:02d}", acts
+
+        monthly: list[dict] = []
+        monthly_acts: dict[str, list] = {}
+        with ThreadPoolExecutor(max_workers=4) as pool:
+            futures = {pool.submit(_fetch_month_strava, yr, mo): (yr, mo)
+                       for yr, mo in months_keys}
+            for fut in as_completed(futures):
+                yr, mo = futures[fut]
+                try:
+                    key, acts = fut.result()
+                    monthly_acts[key] = acts
+                except Exception as exc:
+                    log.warning("Strava monthly fetch failed %s-%s: %s", yr, mo, exc)
+                    monthly_acts[f"{yr}-{mo:02d}"] = []
+
+        for (yr, mo) in months_keys:
+            key  = f"{yr}-{mo:02d}"
+            acts = monthly_acts.get(key, [])
+            monthly.append(build_month_summary(acts, None, yr, mo))
+
+        # Derive activity types
+        types = list(dict.fromkeys(a["type"] for a in period_acts if a["type"]))
+
+        return {
+            **{k: member.get(k, "") for k in ("id","name","role","emoji","color","bg","garminDevice")},
+            "types":        types,
+            "calories":     week["calories"],
+            "workouts":     week["workouts"],
+            "km":           week["km"],
+            "runKm":        split["runKm"],
+            "cycleKm":      split["cycleKm"],
+            "virtualKm":    split["virtualKm"],
+            "swimKm":       split["swimKm"],
+            "skiKm":        split["skiKm"],
+            "walkKm":       split["walkKm"],
+            "otherKm":      split["otherKm"],
+            "actKcal":      week["actKcal"],
+            "bmi":          0.0,
+            "week":         week["week"],
+            "weekCalories": week["weekCalories"],
+            "kmByType":     week["kmByType"],
+            "monthly":      monthly,
+            "provider":     "strava",
+        }
+    except Exception as exc:
+        log.exception("Strava fetch failed user %s: %s", uid, exc)
+        return None
+
+
 def _stub(member: dict[str, Any]) -> dict[str, Any]:
-    z = {"cal": 0, "sess": 0, "km": 0.0, "actKcal": 0, "bmi": None, "days": [0]*28}
+    z = {"year": 0, "month": 0, "cal": 0, "sess": 0, "km": 0.0, "runKm": 0.0,
+         "actKcal": 0, "bmi": None, "days": [0]*28}
     safe = ("id","name","role","emoji","color","bg","garminDevice","types","picture","google_email")
     return {
         **{k: member.get(k,"") for k in safe},
         "calories":0,"workouts":0,"km":0.0,"actKcal":0,"bmi":0.0,
-        "week":[0]*7,"weekCalories":[0]*7,
+        "runKm":0.0,"cycleKm":0.0,"virtualKm":0.0,"swimKm":0.0,
+        "skiKm":0.0,"walkKm":0.0,"otherKm":0.0,
+        "week":[0]*7,"weekCalories":[0]*7,"kmByType":{},
         "monthly":[dict(z) for _ in range(12)],
+        "provider": member.get("provider","garmin"),
         "_stub": True,
     }
 
 
 @app.get("/")
 def root():
-    return jsonify({"name": "Brew Crew API", "status": "ok"})
+    return jsonify({"name": "Fette Otter API", "status": "ok"})
+
+
+# ── Strava OAuth endpoints ────────────────────────────────────────────────────
+
+@app.get("/api/strava/auth")
+def strava_auth():
+    """Redirect user to Strava OAuth page. Pass ?name=... and optionally ?user_id=..."""
+    name    = request.args.get("name", "").strip()
+    user_id = request.args.get("user_id", "").strip()
+    if not name:
+        return jsonify({"error": "name parameter required"}), 400
+    state = urllib.parse.urlencode({"name": name, "user_id": user_id})
+    url   = sv.auth_url(state=state)
+    return redirect(url)
+
+
+@app.get("/api/strava/callback")
+def strava_callback():
+    """Strava OAuth callback — exchange code, create/update member, redirect to dashboard."""
+    DASHBOARD = "https://baarti-baerti.github.io/Fette-Otter/garmin-dashboard.html"
+
+    error = request.args.get("error")
+    if error:
+        return redirect(f"{DASHBOARD}?strava_error={urllib.parse.quote(error)}")
+
+    code  = request.args.get("code", "")
+    state = request.args.get("state", "")
+    params = dict(urllib.parse.parse_qsl(state))
+    name    = params.get("name", "").strip()
+    user_id = params.get("user_id", "").strip()
+
+    if not code:
+        return redirect(f"{DASHBOARD}?strava_error=no_code")
+
+    try:
+        token = sv.exchange_code(code)
+    except Exception as exc:
+        log.exception("Strava token exchange failed: %s", exc)
+        return redirect(f"{DASHBOARD}?strava_error=token_exchange_failed")
+
+    athlete = token.get("athlete", {})
+    strava_id  = str(athlete.get("id", ""))
+    first      = athlete.get("firstname", "")
+    last       = athlete.get("lastname", "")
+    full_name  = name or f"{first} {last}".strip() or f"Strava {strava_id}"
+    picture    = athlete.get("profile_medium") or athlete.get("profile") or ""
+    google_sub = f"strava_{strava_id}"
+
+    # Upsert member
+    existing = g.get_by_google_sub(google_sub)
+    if existing:
+        member = existing
+        # Update name/picture if provided
+        if name and name != member.get("name"):
+            g.update_member(member["id"], {"name": name})
+    else:
+        member = g.add_member(
+            google_sub=google_sub,
+            google_email=f"{strava_id}@strava",
+            name=full_name,
+            picture=picture,
+            garmin_email="",
+            role="Fette Otter",
+        )
+        # Mark as Strava provider
+        g.update_member(member["id"], {"provider": "strava", "picture": picture})
+
+    sv.save_token(member["id"], token)
+    log.info("Strava member %s (id=%s) authenticated", full_name, member["id"])
+
+    # Redirect back to dashboard with member info so frontend can store session
+    qs = urllib.parse.urlencode({
+        "strava_ok":  "1",
+        "member_id":  member["id"],
+        "member_name": full_name,
+    })
+    return redirect(f"{DASHBOARD}?{qs}")
 
 
 @app.get("/api/health")
@@ -244,7 +423,7 @@ def join():
             name=name,
             picture="",
             garmin_email=garmin_email,
-            role="Brew Crew",
+            role="Fette Otter",
         )
 
         # Authenticate Garmin
@@ -393,5 +572,5 @@ def get_user(user_id: int):
 if __name__ == "__main__":
     port  = int(os.environ.get("PORT", 5050))
     debug = os.environ.get("FLASK_DEBUG", "false").lower() == "true"
-    log.info("Brew Crew API — port %d", port)
+    log.info("Fette Otter API — port %d", port)
     app.run(host="0.0.0.0", port=port, debug=debug, threaded=True)
