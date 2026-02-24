@@ -22,7 +22,6 @@ from flask_cors import CORS
 from garth.exc import GarthException, GarthHTTPError
 import garmin as g
 from garmin import strava as sv
-from garmin.transform import build_month_summary
 
 logging.basicConfig(
     level=logging.INFO,
@@ -154,6 +153,31 @@ def load_garmin_user_data(member: dict[str, Any], range_days: int) -> dict[str, 
         return None
 
 
+def _build_month_from_normalised(acts: list[dict], year: int, month: int) -> dict:
+    """Like build_month_summary but for already-normalised activity dicts (Strava)."""
+    import calendar as cal_mod
+    from garmin.transform import _km, _split_km
+    cal    = sum(a["calories"]   for a in acts)
+    sess   = len(acts)
+    km     = _km(sum(a["distance_m"] for a in acts))
+    actKcal= sum(a["active_kcal"] for a in acts)
+    runKm  = _km(sum(a["distance_m"] for a in acts if a.get("type") == "Running"))
+    _, last_day = cal_mod.monthrange(year, month)
+    days: list[int] = []
+    for day_num in range(1, 29):
+        if day_num > last_day:
+            days.append(0)
+            continue
+        d = date(year, month, day_num).isoformat()
+        day_acts = [a for a in acts if a["date"] == d]
+        days.append(sum(a["active_kcal"] for a in day_acts))
+    return {
+        "year": year, "month": month,
+        "cal": cal, "sess": sess, "km": km, "runKm": runKm,
+        "actKcal": actKcal, "bmi": None, "days": days,
+    }
+
+
 def load_strava_user_data(member: dict[str, Any], range_days: int) -> dict[str, Any] | None:
     """Load activity data for a Strava-connected member."""
     uid = member["id"]
@@ -217,7 +241,7 @@ def load_strava_user_data(member: dict[str, Any], range_days: int) -> dict[str, 
         for (yr, mo) in months_keys:
             key  = f"{yr}-{mo:02d}"
             acts = monthly_acts.get(key, [])
-            monthly.append(build_month_summary(acts, None, yr, mo))
+            monthly.append(_build_month_from_normalised(acts, yr, mo))
 
         # Derive activity types
         types = list(dict.fromkeys(a["type"] for a in period_acts if a["type"]))
