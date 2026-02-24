@@ -415,6 +415,51 @@
     background: #ede9fe;
   }
 
+  /* ── Leaderboard table ── */
+  .lb-scroll { overflow-x: auto; }
+  .lb-table { width: 100%; border-collapse: collapse; }
+  .lb-table th {
+    font-family: 'Nunito', sans-serif;
+    font-size: 0.6rem; font-weight: 800;
+    color: var(--muted); text-transform: uppercase;
+    letter-spacing: .06em; padding: 0 8px 10px;
+    text-align: right; white-space: nowrap;
+    cursor: pointer; user-select: none;
+  }
+  .lb-table th:first-child { text-align: left; padding-left: 0; min-width: 160px; }
+  .lb-table th.sort-active { color: var(--violet); }
+  .lb-table td {
+    padding: 8px 8px; font-family: 'Nunito', sans-serif;
+    font-size: 0.78rem; font-weight: 800;
+    text-align: right; white-space: nowrap;
+    border-top: 1px solid var(--border);
+  }
+  .lb-table td:first-child { text-align: left; padding-left: 0; }
+  .lb-table tr { cursor: pointer; transition: background 0.15s; }
+  .lb-table tr:hover td { background: var(--surface2); }
+  .lb-table tr.lb-active td { background: var(--bg2); }
+  .lb-table tr.lb-active td:first-child { border-left: 3px solid var(--violet); padding-left: 5px; }
+  .lb-rank {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 20px; height: 20px; border-radius: 7px;
+    font-size: 0.68rem; font-weight: 900;
+    background: var(--surface2); color: var(--muted);
+    margin-right: 6px; flex-shrink: 0;
+  }
+  .lb-rank.top1 { background: #fef3c7; color: #b45309; }
+  .lb-rank.top2 { background: #f1f5f9; color: #475569; }
+  .lb-rank.top3 { background: #fdf4ff; color: #9333ea; }
+  .lb-user-cell { display: flex; align-items: center; gap: 6px; }
+  .lb-avatar-sm {
+    width: 28px; height: 28px; border-radius: 9px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.9rem; flex-shrink: 0;
+  }
+  .lb-name { font-size: 0.82rem; font-weight: 800; color: var(--text); }
+  .lb-device { font-size: 0.6rem; font-weight: 600; color: var(--muted); }
+  .lb-zero { color: #cbd5e1 !important; font-weight: 600 !important; }
+  .lb-sort-col { color: var(--violet) !important; }
+
   /* ── BOTTOM ROW ── */
   .bottom-row { padding: 0 24px 24px; display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
   .compare-chart { padding: 20px 22px; }
@@ -876,11 +921,13 @@
         <span class="panel-title">🏆 Leaderboard</span>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
           <div class="metric-tabs" id="metricTabs">
-            <button class="mtab" onclick="setMetric(this,'workouts')">Workouts</button>
-            <button class="mtab active" onclick="setMetric(this,'km')">Overall km</button>
-            <button class="mtab" onclick="setMetric(this,'runKm')">Running km</button>
-            <button class="mtab" onclick="setMetric(this,'cycleKm')">Biking km</button>
-            <button class="mtab" onclick="setMetric(this,'otherKm')">Other km</button>
+            <button class="mtab active" onclick="setMetric(this,'km')">Total km</button>
+            <button class="mtab" onclick="setMetric(this,'runKm')">Run km</button>
+            <button class="mtab" onclick="setMetric(this,'cycleKm')">Bike km</button>
+            <button class="mtab" onclick="setMetric(this,'virtualKm')">Virtual km</button>
+            <button class="mtab" onclick="setMetric(this,'skiKm')">Ski km</button>
+            <button class="mtab" onclick="setMetric(this,'swimKm')">Swim km</button>
+            <button class="mtab" onclick="setMetric(this,'workouts')">Sessions</button>
             <button class="mtab" onclick="setMetric(this,'actKcal')">Act. Kcal</button>
           </div>
         </div>
@@ -1090,6 +1137,9 @@ function normaliseUser(raw, idx) {
     km:           raw.km           || 0,
     runKm:        raw.runKm        || 0,
     cycleKm:      raw.cycleKm      || 0,
+    virtualKm:    raw.virtualKm    || 0,
+    swimKm:       raw.swimKm       || 0,
+    skiKm:        raw.skiKm        || 0,
     otherKm:      raw.otherKm      || 0,
     actKcal:      raw.actKcal      || raw.active_kcal || 0,
     bmi:          raw.bmi          || null,
@@ -1275,34 +1325,60 @@ function renderAll(){
 
 // ════ OVERVIEW ════
 function renderLB(){
-  const kmMetrics = new Set(['km','runKm','cycleKm','otherKm']);
-  const fmtVal=(u,m)=>{
-    if(kmMetrics.has(m)) return (u[m]||0).toFixed(1)+'km';
-    if(m==='actKcal') return ((u.actKcal||0)/1000).toFixed(1)+'K';
-    return u[m]||0;
-  };
-  const units={workouts:'sessions',km:'km',runKm:'run km',cycleKm:'bike km',otherKm:'other km',actKcal:'act kcal'};
-  const icons={km:'🗺️',runKm:'🏃',cycleKm:'🚴',otherKm:'⚡',workouts:'💪',actKcal:'🔥'};
-  const sorted=[...users].sort((a,b)=>(b[curMetric]||0)-(a[curMetric]||0));
-  const max=sorted[0]?.[curMetric] || 1;
-  document.getElementById('leaderboard').innerHTML=sorted.map((u,i)=>{
-    const pct=Math.round((u[curMetric]||0)/max*100);
-    const rc=i===0?'top1':i===1?'top2':i===2?'top3':'';
-    const ac=u.id===selUser?.id?'active-user':'';
-    return`<div class="lb-row ${ac}" onclick="pickUser(${u.id})">
-      <div class="rank ${rc}">${i+1}</div>
-      <div class="avatar" style="background:${u.bg}">${u.picture ? `<img src="${u.picture}" style="width:100%;height:100%;border-radius:50%;object-fit:cover">` : u.emoji}</div>
-      <div>
-        <div class="user-name">${u.name}</div>
-        <div class="user-sub">${u.garminDevice}</div>
-        <div class="bar-wrap"><div class="bar-fill" style="width:${pct}%;background:${u.color}"></div></div>
-      </div>
-      <div class="lb-metric"><div class="lb-metric-val" style="color:${u.color}">${u.workouts||0}</div><div class="lb-metric-lbl">sessions</div></div>
-      <div class="lb-metric"><div class="lb-metric-val">🏃 ${(u.runKm||0).toFixed(1)}</div><div class="lb-metric-lbl">run km</div></div>
-      <div class="lb-metric"><div class="lb-metric-val">🚴 ${(u.cycleKm||0).toFixed(1)}</div><div class="lb-metric-lbl">bike km</div></div>
-      <div class="lb-metric"><div class="lb-metric-val" style="color:${u.color}">${icons[curMetric]} ${fmtVal(u,curMetric)}</div><div class="lb-metric-lbl">${units[curMetric]}</div></div>
-    </div>`;
+  const COLS = [
+    { key:'workouts',  label:'Sessions', fmt: u => u.workouts||0,                      unit:'' },
+    { key:'runKm',     label:'🏃 Run',    fmt: u => fmtKm(u.runKm),                     unit:'km' },
+    { key:'cycleKm',   label:'🚴 Bike',   fmt: u => fmtKm(u.cycleKm),                   unit:'km' },
+    { key:'virtualKm', label:'💻 Virtual',fmt: u => fmtKm(u.virtualKm),                 unit:'km' },
+    { key:'skiKm',     label:'⛷️ Ski',    fmt: u => fmtKm(u.skiKm),                     unit:'km' },
+    { key:'swimKm',    label:'🏊 Swim',   fmt: u => fmtKm(u.swimKm),                    unit:'km' },
+    { key:'km',        label:'Total',     fmt: u => fmtKm(u.km),                        unit:'km' },
+    { key:'actKcal',   label:'Act. Kcal', fmt: u => ((u.actKcal||0)/1000).toFixed(1)+'K', unit:'' },
+  ];
+  function fmtKm(v){ return (v||0) > 0 ? (v||0).toFixed(1) : '—'; }
+
+  const sorted = [...users].sort((a,b) => (b[curMetric]||0) - (a[curMetric]||0));
+
+  const thead = `<tr>
+    <th style="text-align:left">Athlete</th>
+    ${COLS.map(c => `<th class="${c.key===curMetric?'sort-active':''}" onclick="setMetricKey('${c.key}')">
+      ${c.label}${c.unit?' <span style="font-weight:600;opacity:.6">'+c.unit+'</span>':''}
+      ${c.key===curMetric?'<span style="color:var(--violet)">▾</span>':''}
+    </th>`).join('')}
+  </tr>`;
+
+  const tbody = sorted.map((u, i) => {
+    const rc = i===0?'top1':i===1?'top2':i===2?'top3':'';
+    const ac = u.id===selUser?.id ? 'lb-active' : '';
+    const cells = COLS.map(c => {
+      const raw = u[c.key]||0;
+      const isZero = raw === 0;
+      const isSort = c.key === curMetric;
+      const cls = isZero ? 'lb-zero' : isSort ? 'lb-sort-col' : '';
+      return `<td class="${cls}" style="${isSort&&!isZero?'color:'+u.color:''}">${c.fmt(u)}</td>`;
+    }).join('');
+    return `<tr class="${ac}" onclick="pickUser(${u.id})">
+      <td>
+        <div class="lb-user-cell">
+          <span class="lb-rank ${rc}">${i+1}</span>
+          <div class="lb-avatar-sm" style="background:${u.bg}">${u.picture?`<img src="${u.picture}" style="width:100%;height:100%;border-radius:9px;object-fit:cover">`:u.emoji}</div>
+          <div><div class="lb-name">${u.name}</div><div class="lb-device">${u.garminDevice}</div></div>
+        </div>
+      </td>
+      ${cells}
+    </tr>`;
   }).join('');
+
+  document.getElementById('leaderboard').innerHTML =
+    `<div class="lb-scroll"><table class="lb-table"><thead>${thead}</thead><tbody>${tbody}</tbody></table></div>`;
+}
+
+function setMetricKey(k){
+  curMetric = k;
+  document.querySelectorAll('.mtab').forEach(b => b.classList.remove('active'));
+  const btn = [...document.querySelectorAll('.mtab')].find(b => b.getAttribute('onclick').includes(`'${k}'`));
+  if(btn) btn.classList.add('active');
+  renderLB();
 }
 
 function renderDetail(){
@@ -1401,7 +1477,8 @@ function pickUser(id){ selUser=users.find(u=>u.id===id); renderLB();renderDetail
 function setMetric(btn,m){
   curMetric=m;
   document.querySelectorAll('.mtab').forEach(b=>b.classList.remove('active'));
-  btn.classList.add('active'); renderLB();
+  btn.classList.add('active');
+  renderLB();
 }
 function setWeek(btn,p){
   document.querySelectorAll('.week-btn').forEach(b=>b.classList.remove('active')); btn.classList.add('active');
