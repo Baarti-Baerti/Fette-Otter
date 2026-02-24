@@ -1852,10 +1852,8 @@ function setWeek(btn,p){
 
 // ════ MONTHLY PROGRESS — SVG line charts, one per metric ════
 const MP_METRICS = [
-  { key: 'km',      label: '🗺️ Total Distance',   unit: 'km',   axFmt: v => v.toFixed(0),          valFmt: v => v.toFixed(1) + ' km',         field: m => m.km      || 0 },
-  { key: 'runKm',   label: '🏃 Running Distance',  unit: 'km',   axFmt: v => v.toFixed(0),          valFmt: v => v.toFixed(1) + ' km',         field: m => m.runKm   || 0 },
-  { key: 'sess',    label: '💪 Sessions',           unit: '',     axFmt: v => Math.round(v),         valFmt: v => Math.round(v) + ' sessions',  field: m => m.sess    || 0 },
-  { key: 'actKcal', label: '⚡ Active Calories',    unit: 'kcal', axFmt: v => (v/1000).toFixed(0)+'K', valFmt: v => (v/1000).toFixed(1) + 'K', field: m => m.actKcal || 0 },
+  { key: 'runKm',   label: '🏃 Running Distance',  unit: 'km',   axFmt: v => v.toFixed(0),             valFmt: v => v.toFixed(1) + ' km',      field: m => m.runKm   || 0 },
+  { key: 'actKcal', label: '⚡ Active Calories',    unit: 'kcal', axFmt: v => (v/1000).toFixed(0)+'K',  valFmt: v => (v/1000).toFixed(1) + 'K', field: m => m.actKcal || 0 },
 ];
 
 const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
