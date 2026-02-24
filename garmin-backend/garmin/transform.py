@@ -57,6 +57,16 @@ def _km(distance_m: float) -> float:
     return round(distance_m / 1000, 1)
 
 
+def _km_by_type(activities: list[dict[str, Any]]) -> dict[str, float]:
+    """Return a dict of {activity_type: total_km} for activities with distance."""
+    result: dict[str, float] = {}
+    for a in activities:
+        if a["distance_m"] > 0:
+            t = a["type"] or "Other"
+            result[t] = round(result.get(t, 0) + a["distance_m"] / 1000, 1)
+    return result
+
+
 # ── weekly summary ────────────────────────────────────────────────────────────
 
 def build_week_summary(
@@ -107,6 +117,7 @@ def build_week_summary(
         "actKcal":   int(sum(a["active_kcal"] for a in total_activities) * scale),
         "week":      day_flags,
         "weekCalories": day_cals,
+        "kmByType":  _km_by_type(total_activities),
     }
 
 
@@ -210,5 +221,6 @@ def build_user_payload(
         "bmi":         round(bmi, 1) if bmi else 0.0,
         "week":        week["week"],
         "weekCalories": week["weekCalories"],
+        "kmByType":    week.get("kmByType", {}),
         "monthly":     monthly,
     }
