@@ -854,9 +854,9 @@
     <div class="live-pill"><div class="live-dot"></div>Live Sync</div>
     <div id="clock">--:--:--</div>
     <div class="week-selector" id="weekSelector">
-      <button class="week-btn" data-range="4w" onclick="setWeek(this,'4w')">4W</button>
-      <button class="week-btn active" data-range="1w" onclick="setWeek(this,'1w')">1W</button>
-      <button class="week-btn" data-range="today" onclick="setWeek(this,'today')">Today</button>
+      <button class="week-btn" data-range="lastmonth" onclick="setWeek(this,'lastmonth')">Last Month</button>
+      <button class="week-btn active" data-range="thismonth" onclick="setWeek(this,'thismonth')">This Month</button>
+      <button class="week-btn" data-range="ytd" onclick="setWeek(this,'ytd')">Year to Date</button>
     </div>
   </div>
 </header>
@@ -864,28 +864,22 @@
 <!-- NAV TABS -->
 <div class="nav-tabs">
   <button class="nav-tab active" onclick="switchPage('overview',this)">📊 Overview</button>
-  <button class="nav-tab" onclick="switchPage('monthly',this)">📅 Monthly</button>
 </div>
 
 <!-- ══ OVERVIEW PAGE ══ -->
 <div class="page active" id="page-overview">
-  <!-- Hero stats inline top bar -->
-  <div class="hero" id="heroStats"></div>
 
   <div class="main-grid">
     <!-- Leaderboard -->
     <div class="panel">
       <div class="panel-header">
-        <span class="panel-title">🏆 Team Leaderboard</span>
+        <span class="panel-title">🏆 Leaderboard</span>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
           <div class="metric-tabs" id="metricTabs">
-            <button class="mtab active" onclick="setMetric(this,'calories')">Calories</button>
             <button class="mtab" onclick="setMetric(this,'workouts')">Workouts</button>
-            <button class="mtab" onclick="setMetric(this,'km')">Distance</button>
+            <button class="mtab active" onclick="setMetric(this,'km')">Distance</button>
             <button class="mtab" onclick="setMetric(this,'actKcal')">Act. Kcal</button>
-            <button class="mtab" onclick="setMetric(this,'bmi')">BMI</button>
           </div>
-          <span class="panel-badge">8 athletes</span>
         </div>
       </div>
       <div id="leaderboard"></div>
@@ -1097,6 +1091,7 @@ function normaliseUser(raw, idx) {
     week:         raw.week         || raw.week_active  || [],
     weekCalories: raw.weekCalories || raw.week_calories || [],
     garminDevice: raw.garminDevice || raw.garmin_device || 'Garmin',
+    kmByType:     raw.kmByType || {},
     // monthly populated separately
     monthly: raw.monthly || [],
   };
@@ -1104,7 +1099,7 @@ function normaliseUser(raw, idx) {
 
 // ── Shared state ──────────────────────────────────────────────────
 let users = [];
-let selUser = null, curMetric = 'calories', selMonth = 0, selMoUser = null;
+let selUser = null, curMetric = 'km', selMonth = 0, selMoUser = null;
 let usingLiveData = false;
 
 const DAYS = ['M','T','W','T','F','S','S'];
@@ -1157,7 +1152,7 @@ function genMonthly(u) {
 // ──────────────────────────────────────────────────────────────────
 //  DATA LOADING — try backend, fall back to mock
 // ──────────────────────────────────────────────────────────────────
-async function loadData(period = '1w') {
+async function loadData(period = 'thismonth') {
   showBanner('⏳ Connecting to Garmin backend…', 'info');
   try {
     const res = await fetch(`${API_BASE}/api/team?range=${period}`, {
@@ -1220,7 +1215,7 @@ function switchPage(p,btn){
 }
 
 function renderAll(){
-  renderHero(); renderLB(); renderDetail(); renderTypes(); renderCalChart(); renderRings();
+  renderLB(); renderDetail(); renderTypes(); renderCalChart(); renderRings();
   setTimeout(()=>{
     document.querySelectorAll('.bar-fill,.cbar,.mc-bar-fill,.umc-bar').forEach(b=>{
       const w=b.style.width; b.style.width='0';
@@ -1230,50 +1225,25 @@ function renderAll(){
 }
 
 // ════ OVERVIEW ════
-function renderHero(){
-  const tCal=users.reduce((a,u)=>a+u.calories,0);
-  const tSess=users.reduce((a,u)=>a+u.workouts,0);
-  const tKm=users.reduce((a,u)=>a+u.km,0).toFixed(1);
-  const avgBmi=(users.reduce((a,u)=>a+u.bmi,0)/users.length).toFixed(1);
-  const cards=[
-    {icon:'🔥',l:'Team Calories',v:(tCal/1000).toFixed(1)+'K',s:'kcal this week',d:'+12% vs last week',up:true,c:'s-violet'},
-    {icon:'💪',l:'Total Sessions',v:tSess,s:'all 8 athletes',d:'+3 vs last week',up:true,c:'s-pink'},
-    {icon:'🗺️',l:'Team Distance',v:tKm+'km',s:'combined this week',d:'+8% vs last week',up:true,c:'s-sky'},
-    {icon:'⚖️',l:'Avg Team BMI',v:avgBmi,s:'team average',d:'-0.2 vs last month',up:true,c:'s-mint'},
-  ];
-  document.getElementById('heroStats').innerHTML=cards.map((c,i)=>`
-    <div class="stat-card ${c.c} fade-in" style="animation-delay:${i*0.07}s">
-      <div class="stat-card-icon">${c.icon}</div>
-      <div class="stat-label">${c.l}</div>
-      <div class="stat-value">${c.v}</div>
-      <div class="stat-sub">${c.s}</div>
-      <span class="stat-delta ${c.up?'delta-up':'delta-down'}">${c.up?'↑':'↓'} ${c.d}</span>
-    </div>`).join('');
-}
-
 function renderLB(){
   const fmtVal=(u,m)=>{
-    if(m==='calories') return (u.calories/1000).toFixed(1)+'K';
-    if(m==='km') return u.km.toFixed(1);
+    if(m==='km') return u.km.toFixed(1)+'km';
     if(m==='actKcal') return (u.actKcal/1000).toFixed(1)+'K';
-    if(m==='bmi') return u.bmi.toFixed(1);
     return u[m];
   };
-  const units={calories:'kcal',workouts:'sessions',km:'km',actKcal:'act kcal',bmi:'BMI'};
-  const sorted=curMetric==='bmi'
-    ? [...users].sort((a,b)=>a.bmi-b.bmi)
-    : [...users].sort((a,b)=>b[curMetric]-a[curMetric]);
-  const max=curMetric==='bmi' ? Math.max(...users.map(u=>u.bmi)) : sorted[0][curMetric];
+  const units={workouts:'sessions',km:'km',actKcal:'act kcal'};
+  const sorted=[...users].sort((a,b)=>b[curMetric]-a[curMetric]);
+  const max=sorted[0]?.[curMetric] || 1;
   document.getElementById('leaderboard').innerHTML=sorted.map((u,i)=>{
-    const pct=curMetric==='bmi' ? Math.round((1-(u.bmi-18)/(max-18))*100) : Math.round(u[curMetric]/max*100);
+    const pct=Math.round(u[curMetric]/max*100);
     const rc=i===0?'top1':i===1?'top2':i===2?'top3':'';
-    const ac=u.id===selUser.id?'active-user':'';
+    const ac=u.id===selUser?.id?'active-user':'';
     return`<div class="lb-row ${ac}" onclick="pickUser(${u.id})">
       <div class="rank ${rc}">${i+1}</div>
       <div class="avatar" style="background:${u.bg}">${u.picture ? `<img src="${u.picture}" style="width:100%;height:100%;border-radius:50%;object-fit:cover">` : u.emoji}</div>
       <div>
         <div class="user-name">${u.name}</div>
-        <div class="user-sub">${u.role} · ${u.garminDevice}</div>
+        <div class="user-sub">${u.garminDevice}</div>
         <div class="bar-wrap"><div class="bar-fill" style="width:${pct}%;background:${u.color}"></div></div>
       </div>
       <div class="lb-metric"><div class="lb-metric-val" style="color:${u.color}">${u.workouts}</div><div class="lb-metric-lbl">sessions</div></div>
@@ -1286,28 +1256,43 @@ function renderLB(){
 
 function renderDetail(){
   const u=selUser;
-  const rank=[...users].sort((a,b)=>b.calories-a.calories).findIndex(x=>x.id===u.id)+1;
+  const rank=[...users].sort((a,b)=>b.km-a.km).findIndex(x=>x.id===u.id)+1;
   const dots=u.week.map((a,i)=>{
     const bg=a?(u.weekCalories[i]>800?u.color:u.color+'99'):'#e2e8f8';
     return`<div class="day-cell"><div class="day-dot" style="background:${bg}"></div><span>${DAYS[i]}</span></div>`;
   }).join('');
-  const bmiCat=u.bmi<18.5?'Underweight':u.bmi<25?'Healthy':u.bmi<30?'Overweight':'Obese';
-  const bmiColor=u.bmi<25?'#059669':u.bmi<30?'#d97706':'#dc2626';
+
+  // Distance breakdown by activity type
+  const kmByType = u.kmByType || {};
+  const typeEntries = Object.entries(kmByType).sort((a,b)=>b[1]-a[1]);
+  const totalKm = u.km || 0;
+  const distBreakdown = typeEntries.length > 0
+    ? typeEntries.map(([type, km]) => {
+        const pct = totalKm > 0 ? Math.round(km/totalKm*100) : 0;
+        return `<div style="margin-bottom:8px">
+          <div style="display:flex;justify-content:space-between;margin-bottom:3px">
+            <span style="font-size:.72rem;font-weight:700;color:var(--text2)">${type}</span>
+            <span style="font-size:.72rem;font-weight:800;color:${u.color}">${km}km</span>
+          </div>
+          <div style="height:5px;background:var(--border);border-radius:99px;overflow:hidden">
+            <div style="height:100%;width:${pct}%;background:${u.color};border-radius:99px;transition:width .6s ease"></div>
+          </div>
+        </div>`;
+      }).join('')
+    : `<div style="font-size:.75rem;color:var(--muted);font-weight:600">${totalKm}km total</div>`;
+
   document.getElementById('userDetail').innerHTML=`
     <div class="detail-avatar" style="background:${u.bg}">${u.picture ? `<img src="${u.picture}" style="width:100%;height:100%;border-radius:18px;object-fit:cover">` : u.emoji}</div>
     <div class="detail-name">${u.name}</div>
-    <div class="detail-role">${u.role} · Rank #${rank} · ${u.garminDevice}</div>
+    <div class="detail-role">Rank #${rank} · ${u.garminDevice}</div>
     <div class="detail-grid">
-      <div class="detail-item"><div class="detail-item-lbl">Calories</div><div class="detail-item-val" style="color:${u.color}">${(u.calories/1000).toFixed(1)}K</div></div>
       <div class="detail-item"><div class="detail-item-lbl">Sessions</div><div class="detail-item-val" style="color:${u.color}">${u.workouts}</div></div>
       <div class="detail-item"><div class="detail-item-lbl">Distance</div><div class="detail-item-val">${u.km}<span style="font-size:.9rem">km</span></div></div>
       <div class="detail-item"><div class="detail-item-lbl">Act. Kcal</div><div class="detail-item-val">${(u.actKcal/1000).toFixed(1)}K</div></div>
     </div>
-    <div class="detail-item" style="margin-top:10px;display:flex;align-items:center;justify-content:space-between">
-      <div><div class="detail-item-lbl">BMI</div><div class="detail-item-val" style="color:${bmiColor}">${u.bmi}</div></div>
-      <span style="font-family:'Nunito',sans-serif;font-weight:700;font-size:0.7rem;padding:4px 12px;border-radius:20px;background:${bmiColor}18;color:${bmiColor}">${bmiCat}</span>
-    </div>
-    <div style="font-size:.65rem;color:var(--muted);margin:16px 0 6px;font-weight:700;letter-spacing:.06em;text-transform:uppercase">This week's activity</div>
+    <div style="font-size:.65rem;color:var(--muted);margin:16px 0 8px;font-weight:700;letter-spacing:.06em;text-transform:uppercase">Distance by activity</div>
+    ${distBreakdown}
+    <div style="font-size:.65rem;color:var(--muted);margin:16px 0 6px;font-weight:700;letter-spacing:.06em;text-transform:uppercase">This period's activity</div>
     <div class="week-grid">${dots}</div>`;
 }
 
@@ -1335,7 +1320,7 @@ function renderCalChart(){
 }
 
 function renderRings(){
-  const mxKm=Math.max(...users.map(u=>u.km));
+  const mxKm=Math.max(...users.map(u=>u.km), 1);
   const sz=64,st=7,r=(sz-st)/2,circ=2*Math.PI*r;
   document.getElementById('ringsContainer').innerHTML=users.map(u=>{
     const off=circ*(1-u.km/mxKm);
@@ -1348,7 +1333,7 @@ function renderRings(){
         <text x="50%" y="68%" text-anchor="middle" dominant-baseline="central" fill="#94a3b8" font-family="Nunito" font-size="7" font-weight="700">km</text>
       </svg>
       <div class="ring-name">${u.emoji} ${u.name.split(' ')[0]}</div>
-      <div class="ring-val">BMI ${u.bmi}</div>
+      <div class="ring-val">${u.workouts} sessions</div>
     </div>`;
   }).join('');
 }
@@ -1364,15 +1349,14 @@ function setWeek(btn,p){
   if(usingLiveData){
     loadData(p);
   } else {
-    // Scale mock data
-    const m={'4w':4.2,'1w':1,'today':0.18}[p];
+    const m={'lastmonth':4.2,'thismonth':3.1,'ytd':12}[p] || 1;
     users.forEach(u=>{
       u._c=u._c||u.calories; u.calories=Math.round(u._c*m);
       u._w=u._w||u.workouts; u.workouts=Math.max(1,Math.round(u._w*m));
       u._km=u._km||u.km; u.km=Math.round(u._km*m*10)/10;
       u._ak=u._ak||u.actKcal; u.actKcal=Math.round(u._ak*m);
     });
-    renderHero();renderLB();renderDetail();renderCalChart();renderRings();
+    renderLB();renderDetail();renderCalChart();renderRings();
   }
 }
 
