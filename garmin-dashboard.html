@@ -1152,56 +1152,99 @@ function genMonthly(u) {
 // ──────────────────────────────────────────────────────────────────
 //  DATA LOADING — try backend, fall back to mock
 // ──────────────────────────────────────────────────────────────────
+// ── Data cache ────────────────────────────────────────────────────
+const dataCache = {};   // { thismonth: [...], lastmonth: [...], ytd: [...] }
+let currentPeriod = 'thismonth';
+
+// ──────────────────────────────────────────────────────────────────
+//  DATA LOADING — fetch all periods in parallel, cache results
+// ──────────────────────────────────────────────────────────────────
 async function loadData(period = 'thismonth') {
+  currentPeriod = period;
+
+  // If already cached, just switch view instantly
+  if (dataCache[period]) {
+    applyData(dataCache[period], period, true);
+    return;
+  }
+
   showBanner('⏳ Connecting to Garmin backend…', 'info');
+
+  // Fetch all three periods in parallel
+  const periods = ['thismonth', 'lastmonth', 'ytd'];
   try {
-    const res = await fetch(`${API_BASE}/api/team?range=${period}`, {
-      signal: AbortSignal.timeout(20000),
+    const results = await Promise.all(periods.map(p =>
+      fetch(`${API_BASE}/api/team?range=${p}`, { signal: AbortSignal.timeout(30000) })
+        .then(r => r.ok ? r.json() : Promise.reject(`HTTP ${r.status}`))
+        .catch(e => null)  // don't let one failure block others
+    ));
+
+    let anySuccess = false;
+    periods.forEach((p, i) => {
+      if (results[i] && Array.isArray(results[i])) {
+        dataCache[p] = results[i];
+        anySuccess = true;
+      }
     });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const team = await res.json();
-    if (!Array.isArray(team)) throw new Error('Invalid response');
 
-    users = team.length ? team.map((u, i) => normaliseUser(u, i)) : MOCK_USERS.map((u, i) => normaliseUser(u, i));
-    users.forEach(u => { if (!u.monthly || u.monthly.length < 12) u.monthly = genMonthly(u); });
+    if (!anySuccess) throw new Error('All period fetches failed');
 
-    selUser = users[0];
-    selMoUser = users[0];
-    usingLiveData = true;
-
-    const liveCount = team.filter(u => !u._stub).length;
-    if (team.length === 0) {
-      showBanner('✅ Backend connected · No members yet — click "Join Brew Crew" to add yourself!', 'live');
-    } else if (liveCount === team.length) {
-      showBanner(`✅ Live Garmin data · ${team.length} athletes synced`, 'live');
-    } else {
-      showBanner(`⚡ ${liveCount}/${team.length} athletes live — run auth_setup.py for the rest`, 'warning');
-    }
-    renderAll();
+    // Apply the requested period
+    applyData(dataCache[period] || dataCache['thismonth'] || [], period, true);
 
   } catch(e) {
-    console.error('Backend error:', e.message, e);
-    // Try hitting /api/health to distinguish CORS vs offline
+    console.error('Backend error:', e);
     try {
       const h = await fetch(`${API_BASE}/api/health`, { signal: AbortSignal.timeout(10000) });
-      if (h.ok) {
-        showBanner('⚠️ Backend reachable but /api/team failed — check Railway logs', 'warning');
-      } else {
-        showBanner(`⚠️ Backend error ${h.status} — check Railway logs`, 'warning');
-      }
+      showBanner(h.ok ? '⚠️ Backend reachable but data fetch failed — check Railway logs' : `⚠️ Backend error — check Railway logs`, 'warning');
     } catch(e2) {
-      showBanner(`⚠️ Cannot reach backend (${e.message}) — check CORS or Railway URL`, 'warning');
+      showBanner(`⚠️ Cannot reach backend (${e}) — check CORS or Railway URL`, 'warning');
     }
-    users = MOCK_USERS.map((u, i) => normaliseUser(u, i));
-    users.forEach(u => { u.monthly = genMonthly(u); });
-    selUser = users[0];
-    selMoUser = users[0];
-    usingLiveData = false;
-    renderAll();
+    // Fall back to mock
+    periods.forEach(p => { dataCache[p] = null; });
+    applyMockData(period);
   }
-  if (users[0] && users[0].monthly.length) {
-    selMonth = users[0].monthly.length - 1;
+}
+
+function applyData(team, period, isLive) {
+  if (!team || !team.length) {
+    if (isLive) {
+      users = MOCK_USERS.map((u, i) => normaliseUser(u, i));
+      users.forEach(u => { u.monthly = genMonthly(u); });
+      const liveCount = team ? team.filter(u => !u._stub).length : 0;
+      if (!team || team.length === 0) {
+        showBanner('✅ Backend connected · No members yet — click "Join Brew Crew" to add yourself!', 'live');
+      }
+    }
+  } else {
+    users = team.map((u, i) => normaliseUser(u, i));
+    users.forEach(u => { if (!u.monthly || u.monthly.length < 12) u.monthly = genMonthly(u); });
+    usingLiveData = true;
+    const liveCount = team.filter(u => !u._stub).length;
+    if (liveCount === team.length) {
+      showBanner(`✅ Live data · ${team.length} athlete${team.length!==1?'s':''} · ${periodLabel(period)}`, 'live');
+    } else {
+      showBanner(`⚡ ${liveCount}/${team.length} athletes live · ${periodLabel(period)}`, 'warning');
+    }
   }
+  selUser = users[0];
+  selMoUser = users[0];
+  if (users[0]?.monthly?.length) selMonth = users[0].monthly.length - 1;
+  renderAll();
+}
+
+function applyMockData(period) {
+  users = MOCK_USERS.map((u, i) => normaliseUser(u, i));
+  users.forEach(u => { u.monthly = genMonthly(u); });
+  selUser = users[0];
+  selMoUser = users[0];
+  usingLiveData = false;
+  showBanner('⚠️ Backend offline — showing demo data', 'warning');
+  renderAll();
+}
+
+function periodLabel(p) {
+  return {'thismonth':'This Month','lastmonth':'Last Month','ytd':'Year to Date'}[p] || p;
 }
 
 // ── Page switch ───────────────────────────────────────────────────
@@ -1346,18 +1389,7 @@ function setMetric(btn,m){
 }
 function setWeek(btn,p){
   document.querySelectorAll('.week-btn').forEach(b=>b.classList.remove('active')); btn.classList.add('active');
-  if(usingLiveData){
-    loadData(p);
-  } else {
-    const m={'lastmonth':4.2,'thismonth':3.1,'ytd':12}[p] || 1;
-    users.forEach(u=>{
-      u._c=u._c||u.calories; u.calories=Math.round(u._c*m);
-      u._w=u._w||u.workouts; u.workouts=Math.max(1,Math.round(u._w*m));
-      u._km=u._km||u.km; u.km=Math.round(u._km*m*10)/10;
-      u._ak=u._ak||u.actKcal; u.actKcal=Math.round(u._ak*m);
-    });
-    renderLB();renderDetail();renderCalChart();renderRings();
-  }
+  loadData(p);  // uses cache if already fetched — instant switch
 }
 
 // ════ MONTHLY ════
@@ -1725,7 +1757,9 @@ async function submitJoin() {
 
     const member = data.member;
     saveSession(member);
-    await loadData(document.querySelector('.week-btn.active')?.dataset?.range || '1w');
+    // Invalidate cache so new member's data is fetched fresh
+    Object.keys(dataCache).forEach(k => delete dataCache[k]);
+    await loadData(currentPeriod);
     showSuccessScreen(member, data.rejoined);
     goToStep(3);
 
