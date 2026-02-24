@@ -61,11 +61,23 @@ def internal_error(e):
     return jsonify({"error": "Internal server error", "detail": str(e)}), 500
 
 GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID", "")
-RANGE_DAYS = {"today": 1, "1w": 7, "4w": 28}
 
 
 def _range_days(p: str) -> int:
-    return RANGE_DAYS.get(p, 7)
+    from datetime import date
+    today = date.today()
+    if p == "thismonth":
+        return today.day  # days elapsed in current month
+    if p == "lastmonth":
+        # days in previous month
+        first_this = today.replace(day=1)
+        last_month = first_this - timedelta(days=1)
+        return last_month.day
+    if p == "ytd":
+        return (today - date(today.year, 1, 1)).days + 1
+    # legacy fallback
+    legacy = {"today": 1, "1w": 7, "4w": 28}
+    return legacy.get(p, 28)
 
 
 def verify_google_id_token(id_token: str) -> dict[str, Any]:
