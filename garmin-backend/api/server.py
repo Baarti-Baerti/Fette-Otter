@@ -127,9 +127,11 @@ def load_garmin_user_data(member: dict[str, Any], range_days: int) -> dict[str, 
         monthly_bmis: dict[str, Any] = {}
 
         def _fetch_month(yr, mo):
-            key = f"{yr}-{mo:02d}"
-            acts = g.fetch_activities_for_month(client, yr, mo)
-            return key, acts, bmi
+            key      = f"{yr}-{mo:02d}"
+            acts     = g.fetch_activities_for_month(client, yr, mo)
+            mo_bmi   = g.fetch_bmi_for_month(client, yr, mo)
+            # Fall back to the latest known BMI if month has no measurement
+            return key, acts, mo_bmi if mo_bmi is not None else bmi
 
         with ThreadPoolExecutor(max_workers=4) as pool:
             futures = {pool.submit(_fetch_month, yr, mo): (yr, mo)
