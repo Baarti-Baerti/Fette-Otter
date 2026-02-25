@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import json
 import os
+import pickle
 import secrets
+import time
 from pathlib import Path
 from typing import Any
 
@@ -37,10 +40,61 @@ def save_client(client: garth.Client, user_id: int) -> None:
         os.chmod(f, 0o644)
 
 
-# ── In-memory store for pending MFA sessions ─────────────────────
-# { mfa_token: { "client": garth.Client, "resume_data": any,
-#                "user_id": int, "member": dict, "is_new": bool } }
-_pending_mfa: dict[str, dict[str, Any]] = {}
+# ── Disk-based pending MFA sessions ──────────────────────────────────────────
+# Stored as pickle files in GARTH_SQUAD_HOME/.mfa/<token>.pkl
+# so they survive across gunicorn worker processes.
+# TTL: 10 minutes — plenty of time for the user to find the OTP code.
+
+_MFA_TTL = 600  # seconds
+
+
+def _mfa_dir() -> Path:
+    d = _squad_home() / ".mfa"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def store_pending_mfa(client: garth.Client, resume_data: Any,
+                      user_id: int, member: dict, is_new: bool) -> str:
+    """Pickle the partial MFA session to disk; returns a token for the client."""
+    token = secrets.token_urlsafe(32)
+    payload = {
+        "client":      client,
+        "resume_data": resume_data,
+        "user_id":     user_id,
+        "member":      member,
+        "is_new":      is_new,
+        "expires_at":  time.time() + _MFA_TTL,
+    }
+    path = _mfa_dir() / f"{token}.pkl"
+    with open(path, "wb") as f:
+        pickle.dump(payload, f)
+    os.chmod(path, 0o600)
+    return token
+
+
+def complete_mfa_login(mfa_token: str, otp_code: str):
+    """
+    Load the pending session from disk, complete login with OTP.
+    Raises KeyError if token unknown/expired, GarthHTTPError if OTP wrong.
+    """
+    path = _mfa_dir() / f"{mfa_token}.pkl"
+    if not path.exists():
+        raise KeyError("MFA session not found — please start login again.")
+
+    with open(path, "rb") as f:
+        pending = pickle.load(f)
+
+    # Delete immediately so it can't be reused
+    path.unlink(missing_ok=True)
+
+    if time.time() > pending["expires_at"]:
+        raise KeyError("MFA session expired — please start login again.")
+
+    client: garth.Client = pending["client"]
+    resume_data = pending["resume_data"]
+    client.resume_login(resume_data, otp_code)
+    return client, pending["user_id"], pending["member"], pending["is_new"]
 
 
 def login_start(email: str, password: str) -> tuple[str, Any]:
@@ -54,38 +108,7 @@ def login_start(email: str, password: str) -> tuple[str, Any]:
     if isinstance(result, tuple) and len(result) == 2 and result[0] == "needs_mfa":
         return "needs_mfa", (client, result[1])
 
-    # No MFA — login completed
     return "ok", client
-
-
-def store_pending_mfa(client: garth.Client, resume_data: Any,
-                      user_id: int, member: dict, is_new: bool) -> str:
-    """Store a partial MFA session; returns a short-lived token for the client."""
-    token = secrets.token_urlsafe(32)
-    _pending_mfa[token] = {
-        "client":      client,
-        "resume_data": resume_data,
-        "user_id":     user_id,
-        "member":      member,
-        "is_new":      is_new,
-    }
-    return token
-
-
-def complete_mfa_login(mfa_token: str, otp_code: str) -> garth.Client:
-    """
-    Complete a pending MFA login with the OTP code.
-    Raises KeyError if token unknown, GarthHTTPError if OTP wrong.
-    """
-    pending = _pending_mfa.pop(mfa_token, None)
-    if pending is None:
-        raise KeyError("MFA session not found or expired — please start login again.")
-
-    client: garth.Client = pending["client"]
-    resume_data = pending["resume_data"]
-
-    client.resume_login(resume_data, otp_code)
-    return client, pending["user_id"], pending["member"], pending["is_new"]
 
 
 def login_and_save(user_id: int, email: str, password: str) -> garth.Client:
