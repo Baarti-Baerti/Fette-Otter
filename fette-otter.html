@@ -442,9 +442,10 @@
   .btn-secondary:hover { background: var(--border); }
 
   /* ── Monthly Progress Page ── */
-  .mp-charts { display: flex; flex-direction: column; gap: 20px; }
-  .mp-chart-panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px 24px 16px; }
-  .mp-chart-title { font-size: .78rem; font-weight: 900; color: var(--text2); text-transform: uppercase; letter-spacing: .07em; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+  .mp-charts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  @media (max-width: 900px) { .mp-charts { grid-template-columns: 1fr; } }
+  .mp-chart-panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 14px 10px; }
+  .mp-chart-title { font-size: .72rem; font-weight: 900; color: var(--text2); text-transform: uppercase; letter-spacing: .07em; margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
 
   /* ── Provider badge ── */
   .pts-table { width:100%; border-collapse:collapse; margin-bottom:28px; }
@@ -1936,7 +1937,7 @@ function renderMonthly() {
   </div>`;
 
   const charts = MP_METRICS.map(metric => {
-    const W = 560, H = 230, pL = 44, pR = 16, pT = 20, pB = 28;
+    const W = 340, H = 170, pL = 36, pR = 10, pT = 16, pB = 22;
     const iW = W - pL - pR, iH = H - pT - pB;
     const nM = 12;
 
@@ -1991,13 +1992,13 @@ function renderMonthly() {
       const v = minV + t * rangeV;
       const y = yPos(v);
       svg += `<line x1="${pL}" y1="${y}" x2="${W - pR}" y2="${y}" stroke="#e2e8f8" stroke-width="1"/>`;
-      svg += `<text x="${pL - 5}" y="${y + 4}" text-anchor="end" font-family="Nunito,sans-serif" font-size="9" fill="#94a3b8" font-weight="700">${metric.axFmt(v)}</text>`;
+      svg += `<text x="${pL - 5}" y="${y + 4}" text-anchor="end" font-family="Nunito,sans-serif" font-size="7" fill="#94a3b8" font-weight="700">${metric.axFmt(v)}</text>`;
     });
 
     // X axis labels
     MONTH_NAMES.forEach((lbl, i) => {
       const future = i + 1 > currentMonth;
-      svg += `<text x="${xPos(i)}" y="${H - 4}" text-anchor="middle" font-family="Nunito,sans-serif" font-size="9" fill="${future ? '#cbd5e1' : '#94a3b8'}" font-weight="700">${lbl}</text>`;
+      svg += `<text x="${xPos(i)}" y="${H - 4}" text-anchor="middle" font-family="Nunito,sans-serif" font-size="7" fill="${future ? '#cbd5e1' : '#94a3b8'}" font-weight="700">${lbl}</text>`;
     });
 
     // Per-user lines + avatar dots
@@ -2005,7 +2006,7 @@ function renderMonthly() {
     // SVG <image> needs a <clipPath> defined in <defs> for circular cropping
     let defs = '<defs>';
     let imageEls = '';
-    const R = 9; // avatar radius in SVG units
+    const R = 7; // avatar radius in SVG units
 
     chartUsers.forEach(u => {
       const vals = allMonths.map((m, i) => {
@@ -2061,7 +2062,7 @@ function renderMonthly() {
     if (metric.skipZero) {
       const y1 = yPos(25), y2 = yPos(18.5);
       svg += `<rect x="${pL}" y="${Math.min(y1,y2)}" width="${iW}" height="${Math.abs(y2-y1)}" fill="#22c55e" opacity="0.06"/>`;
-      svg += `<text x="${W - pR - 2}" y="${y1 - 2}" text-anchor="end" font-family="Nunito,sans-serif" font-size="8" fill="#22c55e" font-weight="800">Healthy</text>`;
+      svg += `<text x="${W - pR - 2}" y="${y1 - 2}" text-anchor="end" font-family="Nunito,sans-serif" font-size="7" fill="#22c55e" font-weight="800">Healthy</text>`;
     }
 
     const subtitle = metric.skipZero
@@ -2072,7 +2073,7 @@ function renderMonthly() {
       <div class="mp-chart-title">${metric.label} — ${currentYear}</div>
       ${subtitle}
       <div style="overflow-x:auto">
-        <svg width="100%" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" style="display:block;min-width:320px;overflow:visible">${svg}</svg>
+        <svg width="100%" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" style="display:block;min-width:200px;overflow:visible">${svg}</svg>
       </div>
     </div>`;
   }).join('');
