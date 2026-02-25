@@ -114,6 +114,26 @@ def fetch_latest_bmi(client: garth.Client) -> float | None:
         return None
 
 
+def fetch_bmi_for_month(client: garth.Client, year: int, month: int) -> float | None:
+    """
+    Returns the last recorded BMI within a specific calendar month, or None.
+    Uses the last entry of the month so we get the most recent measurement.
+    """
+    try:
+        import calendar as cal_mod
+        _, last_day = cal_mod.monthrange(year, month)
+        start = date(year, month, 1)
+        end   = date(year, month, last_day)
+        data  = fetch_body_composition(client, start, end)
+        entries = data.get("dateWeightList") or data.get("allWeightMetrics", [])
+        bmi_entries = [e for e in entries if e.get("bmi") is not None]
+        if not bmi_entries:
+            return None
+        return bmi_entries[-1].get("bmi")
+    except Exception:
+        return None
+
+
 # ── activities ────────────────────────────────────────────────────────────────
 
 ACTIVITY_TYPE_MAP = {
