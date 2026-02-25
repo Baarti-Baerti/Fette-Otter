@@ -40,13 +40,30 @@ def _normalise_activity(act: dict[str, Any]) -> dict[str, Any]:
         else str(act.get("activityType", ""))
     ).lower()
 
+    # Explicit map first, then prefix-based fallback so unknown variants
+    # (e.g. "indoor_running", "fitness_equipment_running") still resolve correctly
+    if atype_raw in ACTIVITY_TYPE_MAP:
+        mapped = ACTIVITY_TYPE_MAP[atype_raw]
+    elif "run" in atype_raw:
+        mapped = "Running"
+    elif "walk" in atype_raw or "hik" in atype_raw:
+        mapped = "Walking"
+    elif "cycl" in atype_raw or "bik" in atype_raw or "ride" in atype_raw:
+        mapped = "Cycling"
+    elif "swim" in atype_raw:
+        mapped = "Swimming"
+    elif "ski" in atype_raw or "snowboard" in atype_raw:
+        mapped = "Skiing"
+    else:
+        mapped = atype_raw.replace("_", " ").title()
+
     return {
-        "id":        act.get("activityId"),
-        "name":      act.get("activityName", ""),
-        "type_raw":  atype_raw,
-        "type":      ACTIVITY_TYPE_MAP.get(atype_raw, atype_raw.replace("_", " ").title()),
-        "date":      (act.get("startTimeLocal") or "")[:10],  # YYYY-MM-DD
-        "calories":  int(act.get("calories") or 0),
+        "id":          act.get("activityId"),
+        "name":        act.get("activityName", ""),
+        "type_raw":    atype_raw,
+        "type":        mapped,
+        "date":        (act.get("startTimeLocal") or "")[:10],
+        "calories":    int(act.get("calories") or 0),
         "active_kcal": int(act.get("activeKilocalories") or act.get("calories") or 0),
         "distance_m":  float(act.get("distance") or 0),
         "duration_s":  float(act.get("duration") or 0),
@@ -238,6 +255,18 @@ def build_user_payload(
         m_bmi = monthly_bmis.get(key, bmi)
         monthly.append(build_month_summary(acts, m_bmi, yr, mo))
 
+    # Derive split km directly from monthly data so the overview leaderboard
+    # is always consistent with the points table (both use the same monthly fetches).
+    # Sum only the months covered by the selected range_days window.
+    today_dt = date.today()
+    range_start = today_dt - timedelta(days=range_days - 1)
+    range_split = _split_km([
+        a
+        for (yr, mo) in months_keys
+        for a in [_normalise_activity(raw) for raw in monthly_activities.get(f"{yr}-{mo:02d}", [])]
+        if a["date"] >= range_start.isoformat()
+    ])
+
     # Derive activity types from recent activities
     recent_norms = [_normalise_activity(a) for a in week_activities]
     seen_types = list(dict.fromkeys(
@@ -251,13 +280,13 @@ def build_user_payload(
         "calories":    week["calories"],
         "workouts":    week["workouts"],
         "km":          week["km"],
-        "runKm":       week.get("runKm", 0),
-        "cycleKm":     week.get("cycleKm", 0),
-        "virtualKm":   week.get("virtualKm", 0),
-        "swimKm":      week.get("swimKm", 0),
-        "skiKm":       week.get("skiKm", 0),
-        "walkKm":      week.get("walkKm", 0),
-        "otherKm":     week.get("otherKm", 0),
+        "runKm":       range_split["runKm"],
+        "cycleKm":     range_split["cycleKm"],
+        "virtualKm":   range_split["virtualKm"],
+        "swimKm":      range_split["swimKm"],
+        "skiKm":       range_split["skiKm"],
+        "walkKm":      range_split["walkKm"],
+        "otherKm":     range_split["otherKm"],
         "actKcal":     week["actKcal"],
         "bmi":         round(bmi, 1) if bmi else 0.0,
         "week":        week["week"],

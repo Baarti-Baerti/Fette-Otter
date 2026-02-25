@@ -177,11 +177,20 @@ def fetch_profile_picture(client: garth.Client) -> str:
 # ── activities ────────────────────────────────────────────────────────────────
 
 ACTIVITY_TYPE_MAP = {
-    "running":              "Running",
-    "trail_running":        "Running",
-    "treadmill_running":    "Running",
-    "ultra_run":            "Running",
-    "obstacle_run":         "Running",
+    # ── Running (all variants → "Running") ───────────────────────
+    "running":                          "Running",
+    "trail_running":                    "Running",
+    "treadmill_running":                "Running",
+    "indoor_running":                   "Running",
+    "ultra_run":                        "Running",
+    "obstacle_run":                     "Running",
+    "virtual_run":                      "Running",
+    "street_running":                   "Running",
+    "track_running":                    "Running",
+    "fitness_equipment_running":        "Running",
+    "snow_shoe_running":                "Running",
+    "run":                              "Running",
+    # ── Cycling ──────────────────────────────────────────────────
     "cycling":              "Cycling",
     "mountain_biking":      "Cycling",
     "gravel_cycling":       "Cycling",
@@ -191,9 +200,11 @@ ACTIVITY_TYPE_MAP = {
     "indoor_cycling":       "VirtualCycling",
     "virtual_ride":         "VirtualCycling",
     "virtual_cycling":      "VirtualCycling",
+    # ── Swimming ─────────────────────────────────────────────────
     "swimming":             "Swimming",
     "lap_swimming":         "Swimming",
     "open_water_swimming":  "Swimming",
+    # ── Skiing ───────────────────────────────────────────────────
     "skiing":               "Skiing",
     "resort_skiing":        "Skiing",
     "resort_skiing_snowboarding_ws":          "Skiing",
@@ -209,9 +220,11 @@ ACTIVITY_TYPE_MAP = {
     "nordic_combined":      "Skiing",
     "alpine_skiing":        "Skiing",
     "telemark_skiing":      "Skiing",
+    # ── Walking ──────────────────────────────────────────────────
     "walking":              "Walking",
     "hiking":               "Walking",
     "trail_hiking":         "Walking",
+    # ── Other ────────────────────────────────────────────────────
     "yoga":                 "Yoga",
     "strength_training":    "Strength",
     "hiit":                 "HIIT",
