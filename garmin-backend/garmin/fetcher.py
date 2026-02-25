@@ -71,16 +71,92 @@ def fetch_body_composition(
     client: garth.Client, start: date, end: date
 ) -> dict[str, Any]:
     """
-    Fetches body composition data (includes BMI, weight) for a date range.
-    Returns the raw response dict with a 'dateWeightList' key.
+    Fetches body composition data for a date range.
+    Tries multiple known Garmin endpoint variants and returns the first
+    response that contains weight entries.
     """
-    return client.connectapi(
-        "/weight-service/weight/range",
-        params={
-            "startDate": _date_str(start),
-            "endDate": _date_str(end),
-        },
-    )
+    endpoints = [
+        ("/weight-service/weight/dateRange", {"startDate": _date_str(start), "endDate": _date_str(end)}),
+        ("/weight-service/weight/range",     {"startDate": _date_str(start), "endDate": _date_str(end)}),
+    ]
+    for path, params in endpoints:
+        try:
+            data = client.connectapi(path, params=params)
+            entries = data.get("dateWeightList") or data.get("allWeightMetrics") or []
+            if entries:
+                return data
+        except Exception:
+            continue
+    return {}
+
+
+def _extract_bmi(entries: list, height_m: float | None = None) -> float | None:
+    """
+    Given weight entries (newest last), return the last BMI value.
+    Uses the bmi field directly if present, otherwise calculates from
+    weight (grams in Garmin) + height_m.
+    """
+    for entry in reversed(entries):
+        bmi = entry.get("bmi")
+        if bmi is not None and float(bmi) > 0:
+            return round(float(bmi), 1)
+        if height_m and height_m > 0:
+            weight = entry.get("weight")
+            if weight:
+                # Garmin stores weight in grams
+                weight_kg = weight / 1000.0 if weight > 500 else float(weight)
+                calculated = weight_kg / (height_m ** 2)
+                if 10 < calculated < 60:   # sanity check
+                    return round(calculated, 1)
+    return None
+
+
+def fetch_user_height(client: garth.Client) -> float | None:
+    """Returns the user's height in metres from their Garmin profile, or None."""
+    try:
+        profile = client.connectapi("/userprofile-service/userprofile")
+        height_cm = (
+            profile.get("userInfo", {}).get("height")
+            or profile.get("height")
+        )
+        if height_cm and float(height_cm) > 0:
+            return float(height_cm) / 100.0
+    except Exception:
+        pass
+    return None
+
+
+def fetch_latest_bmi(client: garth.Client) -> float | None:
+    """
+    Returns the most recently recorded BMI, searching back up to 365 days.
+    Falls back to calculating from weight + height if bmi field is absent.
+    """
+    try:
+        today    = date.today()
+        height_m = fetch_user_height(client)
+        data     = fetch_body_composition(client, today - timedelta(days=365), today)
+        entries  = data.get("dateWeightList") or data.get("allWeightMetrics", [])
+        return _extract_bmi(entries, height_m)
+    except Exception:
+        return None
+
+
+def fetch_bmi_for_month(client: garth.Client, year: int, month: int) -> float | None:
+    """
+    Returns the last recorded BMI within a specific calendar month.
+    Falls back to calculating from weight + height if bmi field is absent.
+    """
+    try:
+        import calendar as cal_mod
+        _, last_day = cal_mod.monthrange(year, month)
+        start    = date(year, month, 1)
+        end      = date(year, month, last_day)
+        height_m = fetch_user_height(client)
+        data     = fetch_body_composition(client, start, end)
+        entries  = data.get("dateWeightList") or data.get("allWeightMetrics", [])
+        return _extract_bmi(entries, height_m)
+    except Exception:
+        return None
 
 
 def fetch_profile_picture(client: garth.Client) -> str:
@@ -96,42 +172,6 @@ def fetch_profile_picture(client: garth.Client) -> str:
     except Exception:
         return ""
 
-
-def fetch_latest_bmi(client: garth.Client) -> float | None:
-    """
-    Returns the most recently recorded BMI value, or None if unavailable.
-    Searches back up to 90 days.
-    """
-    try:
-        today = date.today()
-        data = fetch_body_composition(client, today - timedelta(days=90), today)
-        entries = data.get("dateWeightList") or data.get("allWeightMetrics", [])
-        bmi_entries = [e for e in entries if e.get("bmi") is not None]
-        if not bmi_entries:
-            return None
-        return bmi_entries[-1].get("bmi")
-    except Exception:
-        return None
-
-
-def fetch_bmi_for_month(client: garth.Client, year: int, month: int) -> float | None:
-    """
-    Returns the last recorded BMI within a specific calendar month, or None.
-    Uses the last entry of the month so we get the most recent measurement.
-    """
-    try:
-        import calendar as cal_mod
-        _, last_day = cal_mod.monthrange(year, month)
-        start = date(year, month, 1)
-        end   = date(year, month, last_day)
-        data  = fetch_body_composition(client, start, end)
-        entries = data.get("dateWeightList") or data.get("allWeightMetrics", [])
-        bmi_entries = [e for e in entries if e.get("bmi") is not None]
-        if not bmi_entries:
-            return None
-        return bmi_entries[-1].get("bmi")
-    except Exception:
-        return None
 
 
 # ── activities ────────────────────────────────────────────────────────────────

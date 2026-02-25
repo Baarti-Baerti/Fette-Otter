@@ -9,6 +9,7 @@ from .fetcher import (
     fetch_activities_for_month,
     fetch_latest_bmi,
     fetch_bmi_for_month,
+    fetch_user_height,
     fetch_profile_picture,
     ACTIVITY_TYPE_MAP,
 )
@@ -27,7 +28,8 @@ __all__ = [
     "login_start", "store_pending_mfa", "complete_mfa_login", "save_client",
     "fetch_daily_summaries", "fetch_activities",
     "fetch_activities_last_n_days", "fetch_activities_for_month",
-    "fetch_latest_bmi", "fetch_bmi_for_month", "fetch_profile_picture", "ACTIVITY_TYPE_MAP",
+    "fetch_latest_bmi", "fetch_bmi_for_month", "fetch_user_height",
+    "fetch_profile_picture", "ACTIVITY_TYPE_MAP",
     "build_user_payload",
     "all_members", "get_member", "get_by_google_sub",
     "add_member", "update_member", "remove_member",
