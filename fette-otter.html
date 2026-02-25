@@ -449,7 +449,7 @@
   /* ── Provider badge ── */
   .pts-table { width:100%; border-collapse:collapse; margin-bottom:28px; }
   .pts-table th {
-    font-family:'Nunito',sans-serif; font-size:0.6rem; font-weight:800;
+    font-family:'Nunito',sans-serif; font-size:0.72rem; font-weight:800;
     color:var(--muted); text-transform:uppercase; letter-spacing:.06em;
     padding:0 10px 10px; text-align:center; white-space:nowrap;
   }
@@ -507,7 +507,7 @@
   .lb-table { width: 100%; border-collapse: collapse; }
   .lb-table th {
     font-family: 'Nunito', sans-serif;
-    font-size: 0.6rem; font-weight: 800;
+    font-size: 0.72rem; font-weight: 800;
     color: var(--muted); text-transform: uppercase;
     letter-spacing: .06em; padding: 0 8px 10px;
     text-align: right; white-space: nowrap;
@@ -1471,14 +1471,15 @@ function renderAll(){
 // ════ OVERVIEW ════
 function renderLB(){
   const COLS = [
-    { key:'workouts',  label:'Sessions',       fmt: u => u.workouts||0,                         unit:'' },
-    { key:'runKm',     label:'🏃 Run',          fmt: u => fmtKm(u.runKm),                        unit:'km' },
-    { key:'cycleKm',   label:'🚴 Bike',         fmt: u => fmtKm(u.cycleKm),                      unit:'km' },
-    { key:'virtualKm', label:'💻 Virtual bike', fmt: u => fmtKm(u.virtualKm),                    unit:'km' },
-    { key:'swimKm',    label:'🏊 Swim',         fmt: u => fmtKm(u.swimKm),                       unit:'km' },
-    { key:'walkKm',    label:'🚶 Walk',         fmt: u => fmtKm(u.walkKm),                       unit:'km' },
-    { key:'km',        label:'Total',           fmt: u => fmtKm(u.km),                           unit:'km' },
-    { key:'actKcal',   label:'Act. Kcal',       fmt: u => ((u.actKcal||0)/1000).toFixed(1)+'K',  unit:'' },
+    { key:'workouts',  label:'Sessions',         fmt: u => u.workouts||0,                                   unit:'' },
+    { key:'runKm',     label:'🏃 Run',            fmt: u => fmtKm(u.runKm),                                  unit:'km' },
+    { key:'cycleKm',   label:'🚴 Bike',           fmt: u => fmtKm(u.cycleKm),                                unit:'km' },
+    { key:'virtualKm', label:'💻 Virtual bike',   fmt: u => fmtKm(u.virtualKm),                              unit:'km' },
+    { key:'swimKm',    label:'🏊 Swim',           fmt: u => fmtKm(u.swimKm),                                 unit:'km' },
+    { key:'walkKm',    label:'🚶 Walk',           fmt: u => fmtKm(u.walkKm),                                 unit:'km' },
+    { key:'km',        label:'Total',             fmt: u => fmtKm(u.km),                                     unit:'km' },
+    { key:'actKcal',   label:'Active Calories',   fmt: u => ((u.actKcal||0)/1000).toFixed(1)+'K',            unit:'' },
+    { key:'bmi',       label:'⚖️ BMI',            fmt: u => (u.bmi && u.bmi > 0) ? u.bmi.toFixed(1) : '—',  unit:'' },
   ];
   function fmtKm(v){ return (v||0) > 0 ? (v||0).toFixed(1) : '—'; }
 
@@ -1756,13 +1757,36 @@ function renderPoints(){
     ? users.filter(u => ruleAPoints[u.id] === maxRuleA).map(u => u.id)
     : [];
 
+  // Rule D: biggest BMI improvement (Jan BMI → most recent month's BMI) = +1pt
+  // Only Garmin users with BMI data in both Jan and at least one later month qualify
+  // Improvement = positive number means BMI went DOWN (good)
+  const ruleDImprovement = {};
+  users.forEach(u => {
+    const janData = (u.monthly || []).find(m => m.year === currentYear && m.month === 1);
+    const janBmi  = janData?.bmi;
+    if (!janBmi || janBmi <= 0) return;
+    // Find latest month with BMI data (excluding Jan)
+    const laterMonths = (u.monthly || [])
+      .filter(m => m.year === currentYear && m.month > 1 && m.bmi && m.bmi > 0)
+      .sort((a, b) => b.month - a.month);
+    if (laterMonths.length === 0) return;
+    const latestBmi = laterMonths[0].bmi;
+    const improvement = janBmi - latestBmi; // positive = improved (BMI went down)
+    ruleDImprovement[u.id] = improvement;
+  });
+  const maxImprovement = Math.max(...Object.values(ruleDImprovement), 0);
+  const ruleDWinners = maxImprovement > 0
+    ? users.filter(u => (ruleDImprovement[u.id] || 0) === maxImprovement).map(u => u.id)
+    : [];
+
   // Total points
   const totalPoints = {};
   users.forEach(u => {
     totalPoints[u.id] =
       (ruleAPoints[u.id] || 0) +
       (ruleBWinners.includes(u.id) ? 2 : 0) +
-      (ruleCWinners.includes(u.id) ? 2 : 0);
+      (ruleCWinners.includes(u.id) ? 2 : 0) +
+      (ruleDWinners.includes(u.id) ? 1 : 0);
   });
 
   const sorted = [...users].sort((a,b) => (totalPoints[b.id]||0) - (totalPoints[a.id]||0));
@@ -1781,6 +1805,7 @@ function renderPoints(){
     <th style="color:#818cf8;border-left:2px solid var(--border)" title="Rule A: +1pt per month ≥${GOAL}km">A</th>
     <th style="color:#34d399" title="Rule B: most YTD run km (+2pts)">B</th>
     <th style="color:#f472b6" title="Rule C: most Rule A points (+2pts)">C</th>
+    <th style="color:#fb923c" title="Rule D: biggest BMI improvement Jan→latest month (+1pt)">D</th>
     <th style="border-left:2px solid var(--border)">Total 🏅</th>
   </tr>`;
 
@@ -1814,6 +1839,8 @@ function renderPoints(){
     const ruleA = ruleAPoints[u.id] || 0;
     const hasB  = ruleBWinners.includes(u.id);
     const hasC  = ruleCWinners.includes(u.id);
+    const hasD  = ruleDWinners.includes(u.id);
+    const impD  = ruleDImprovement[u.id];
     const total = totalPoints[u.id] || 0;
 
     return `<tr>
@@ -1827,6 +1854,7 @@ function renderPoints(){
       <td style="color:#818cf8;font-weight:900;border-left:2px solid var(--border)">${ruleA}</td>
       <td style="color:${hasB?'#34d399':'var(--muted)'};font-weight:${hasB?900:600}">${hasB?'+2':'—'}</td>
       <td style="color:${hasC?'#f472b6':'var(--muted)'};font-weight:${hasC?900:600}">${hasC?'+2':'—'}</td>
+      <td style="color:${hasD?'#fb923c':impD!=null?'var(--muted)':'#e2e8f8'};font-weight:${hasD?900:600}" title="${impD!=null?'BMI change: '+(impD>0?'−':'+')+Math.abs(impD).toFixed(1):'No BMI data'}">${hasD?'+1':impD!=null?impD.toFixed(1):'—'}</td>
       <td style="border-left:2px solid var(--border)"><span class="pts-total">${total}</span></td>
     </tr>`;
   }).join('');
@@ -1836,6 +1864,7 @@ function renderPoints(){
     <span style="color:#818cf8">A: +1pt / qualifying month</span>
     <span style="color:#34d399">B: most YTD run km = +2pts</span>
     <span style="color:#f472b6">C: most Rule A pts = +2pts</span>
+    <span style="color:#fb923c">D: biggest BMI drop Jan→latest = +1pt (Garmin only)</span>
     <span style="color:var(--violet)">Current month shown in progress, not yet scored</span>
   </div>`;
 
@@ -1873,8 +1902,9 @@ function setWeek(btn,p){
 
 // ════ MONTHLY PROGRESS — SVG line charts, one per metric ════
 const MP_METRICS = [
-  { key: 'runKm',   label: '🏃 Running Distance',  unit: 'km',   axFmt: v => v.toFixed(0),             valFmt: v => v.toFixed(1) + ' km',      field: m => m.runKm   || 0 },
-  { key: 'actKcal', label: '⚡ Active Calories',    unit: 'kcal', axFmt: v => (v/1000).toFixed(0)+'K',  valFmt: v => (v/1000).toFixed(1) + 'K', field: m => m.actKcal || 0 },
+  { key: 'runKm',   label: '🏃 Running Distance',  unit: 'km',   axFmt: v => v.toFixed(0),             valFmt: v => v.toFixed(1) + ' km',      field: m => m.runKm   || 0,    skipZero: false },
+  { key: 'actKcal', label: '⚡ Active Calories',    unit: 'kcal', axFmt: v => (v/1000).toFixed(0)+'K',  valFmt: v => (v/1000).toFixed(1) + 'K', field: m => m.actKcal || 0,    skipZero: false },
+  { key: 'bmi',     label: '⚖️ BMI',                unit: '',     axFmt: v => v.toFixed(1),             valFmt: v => v.toFixed(1),              field: m => m.bmi     || null, skipZero: true  },
 ];
 
 const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -1909,62 +1939,90 @@ function renderMonthly() {
   const charts = MP_METRICS.map(metric => {
     const W = 560, H = 200, pL = 44, pR = 16, pT = 14, pB = 28;
     const iW = W - pL - pR, iH = H - pT - pB;
-    const nM = 12; // always full year on X axis
+    const nM = 12;
 
-    // Only compute scale from months that have data
+    // For BMI: only include users who have at least one non-null value
+    const chartUsers = metric.skipZero
+      ? users.filter(u => u.monthly.some(m => metric.field(m) != null && metric.field(m) > 0))
+      : users;
+
+    if (metric.skipZero && chartUsers.length === 0) {
+      return `<div class="mp-chart-panel">
+        <div class="mp-chart-title">${metric.label}</div>
+        <div style="padding:28px;text-align:center;color:var(--muted);font-size:.82rem;font-weight:700">
+          No BMI data available — log your weight in Garmin Connect to see this chart
+        </div>
+      </div>`;
+    }
+
+    // Collect values only from data months, ignoring nulls
     const dataMonthIndices = allMonths.map((m, i) => m.hasData ? i : -1).filter(i => i >= 0);
-    const allVals = users.flatMap(u =>
+    const allVals = chartUsers.flatMap(u =>
       dataMonthIndices.map(i => {
         const mo = i + 1;
         const mData = u.monthly.find(m => m.month === mo && m.year === currentYear);
-        return mData ? metric.field(mData) : 0;
-      })
+        const v = mData ? metric.field(mData) : null;
+        return (v != null && v > 0) ? v : null;
+      }).filter(v => v != null)
     );
-    const maxV = Math.max(...allVals, 1);
-    const minV = 0;
+
+    if (allVals.length === 0) {
+      return `<div class="mp-chart-panel">
+        <div class="mp-chart-title">${metric.label}</div>
+        <div style="padding:28px;text-align:center;color:var(--muted);font-size:.82rem;font-weight:700">No data yet for this period</div>
+      </div>`;
+    }
+
+    const maxV = Math.max(...allVals);
+    // For BMI use a tight scale (±3 around the range) so differences are visible
+    const minV = metric.skipZero ? Math.max(0, Math.min(...allVals) - 2) : 0;
+    const rangeV = maxV - minV || 1;
 
     const xPos = i => pL + (i / (nM - 1)) * iW;
-    const yPos = v => pT + iH * (1 - (v - minV) / (maxV - minV));
+    const yPos = v => pT + iH * (1 - (v - minV) / rangeV);
 
     let svg = '';
 
     // Shade future months
-    const futureStart = xPos(currentMonth); // x position after last data month
+    const futureStart = xPos(currentMonth);
     svg += `<rect x="${futureStart}" y="${pT}" width="${W - pR - futureStart}" height="${iH}" fill="#f1f5f9" opacity="0.6"/>`;
 
     // Grid lines + Y axis labels
     [0, 0.25, 0.5, 0.75, 1.0].forEach(t => {
-      const v = minV + t * (maxV - minV);
+      const v = minV + t * rangeV;
       const y = yPos(v);
       svg += `<line x1="${pL}" y1="${y}" x2="${W - pR}" y2="${y}" stroke="#e2e8f8" stroke-width="1"/>`;
       svg += `<text x="${pL - 5}" y="${y + 4}" text-anchor="end" font-family="Nunito,sans-serif" font-size="9" fill="#94a3b8" font-weight="700">${metric.axFmt(v)}</text>`;
     });
 
-    // X axis labels — all 12 months
+    // X axis labels
     MONTH_NAMES.forEach((lbl, i) => {
       const future = i + 1 > currentMonth;
       svg += `<text x="${xPos(i)}" y="${H - 4}" text-anchor="middle" font-family="Nunito,sans-serif" font-size="9" fill="${future ? '#cbd5e1' : '#94a3b8'}" font-weight="700">${lbl}</text>`;
     });
 
-    // Per-user lines + dots (only up to current month)
-    users.forEach(u => {
+    // Per-user lines + dots
+    chartUsers.forEach(u => {
       const vals = allMonths.map((m, i) => {
         if (!m.hasData) return null;
         const mData = u.monthly.find(md => md.month === m.mo && md.year === currentYear);
-        return { i, v: mData ? metric.field(mData) : 0 };
+        const v = mData ? metric.field(mData) : null;
+        return (v != null && v > 0) ? { i, v } : null;
       }).filter(Boolean);
 
       if (vals.length === 0) return;
 
-      // Filled area
-      const areaPoints = [
-        `${xPos(vals[0].i)},${pT + iH}`,
-        ...vals.map(({ i, v }) => `${xPos(i)},${yPos(v)}`),
-        `${xPos(vals[vals.length - 1].i)},${pT + iH}`,
-      ].join(' ');
-      svg += `<polygon points="${areaPoints}" fill="${u.color}" opacity="0.07"/>`;
+      // Area fill
+      if (!metric.skipZero) {
+        const areaPoints = [
+          `${xPos(vals[0].i)},${pT + iH}`,
+          ...vals.map(({ i, v }) => `${xPos(i)},${yPos(v)}`),
+          `${xPos(vals[vals.length - 1].i)},${pT + iH}`,
+        ].join(' ');
+        svg += `<polygon points="${areaPoints}" fill="${u.color}" opacity="0.07"/>`;
+      }
 
-      // Line
+      // Line — connect only points that have data (skip null months)
       const linePoints = vals.map(({ i, v }) => `${xPos(i)},${yPos(v)}`).join(' ');
       svg += `<polyline points="${linePoints}" fill="none" stroke="${u.color}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" opacity="0.95"/>`;
 
@@ -1976,8 +2034,20 @@ function renderMonthly() {
       });
     });
 
+    // BMI reference bands (healthy range 18.5–25)
+    if (metric.skipZero) {
+      const y1 = yPos(25), y2 = yPos(18.5);
+      svg += `<rect x="${pL}" y="${Math.min(y1,y2)}" width="${iW}" height="${Math.abs(y2-y1)}" fill="#22c55e" opacity="0.06"/>`;
+      svg += `<text x="${W - pR - 2}" y="${y1 - 2}" text-anchor="end" font-family="Nunito,sans-serif" font-size="8" fill="#22c55e" font-weight="800">Healthy</text>`;
+    }
+
+    const subtitle = metric.skipZero
+      ? `<div style="font-size:.68rem;color:var(--muted);font-weight:700;margin-bottom:10px">Garmin users with weight data only · Green band = healthy range (18.5–25)</div>`
+      : '';
+
     return `<div class="mp-chart-panel">
       <div class="mp-chart-title">${metric.label} — ${currentYear}</div>
+      ${subtitle}
       <div style="overflow-x:auto">
         <svg width="100%" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" style="display:block;min-width:320px">${svg}</svg>
       </div>
