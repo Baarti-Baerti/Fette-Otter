@@ -59,21 +59,29 @@ def internal_error(e):
 GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID", "")
 
 
-def _range_days(p: str) -> int:
+def _range_dates(p: str) -> tuple[date, date]:
+    """Return (start, end) calendar dates for a given period key."""
     from datetime import date
     today = date.today()
     if p == "thismonth":
-        return today.day  # days elapsed in current month
+        return date(today.year, today.month, 1), today
     if p == "lastmonth":
-        # days in previous month
         first_this = today.replace(day=1)
-        last_month = first_this - timedelta(days=1)
-        return last_month.day
+        last_month_end = first_this - timedelta(days=1)
+        last_month_start = last_month_end.replace(day=1)
+        return last_month_start, last_month_end
     if p == "ytd":
-        return (today - date(today.year, 1, 1)).days + 1
+        return date(today.year, 1, 1), today
     # legacy fallback
-    legacy = {"today": 1, "1w": 7, "4w": 28}
-    return legacy.get(p, 28)
+    legacy_days = {"today": 1, "1w": 7, "4w": 28}
+    days = legacy_days.get(p, 28)
+    return today - timedelta(days=days - 1), today
+
+
+def _range_days(p: str) -> int:
+    """Legacy: number of days for the period (kept for Strava path compatibility)."""
+    start, end = _range_dates(p)
+    return (end - start).days + 1
 
 
 def verify_google_id_token(id_token: str) -> dict[str, Any]:
@@ -90,14 +98,14 @@ def verify_google_id_token(id_token: str) -> dict[str, Any]:
     return payload
 
 
-def load_user_data(member: dict[str, Any], range_days: int) -> dict[str, Any] | None:
+def load_user_data(member: dict[str, Any], range_start: date, range_end: date) -> dict[str, Any] | None:
     """Route to correct fetcher based on provider field."""
     if member.get("provider") == "strava":
-        return load_strava_user_data(member, range_days)
-    return load_garmin_user_data(member, range_days)
+        return load_strava_user_data(member, range_start, range_end)
+    return load_garmin_user_data(member, range_start, range_end)
 
 
-def load_garmin_user_data(member: dict[str, Any], range_days: int) -> dict[str, Any] | None:
+def load_garmin_user_data(member: dict[str, Any], range_start: date, range_end: date) -> dict[str, Any] | None:
     uid = member["id"]
     try:
         client = g.get_client(uid)
@@ -105,12 +113,12 @@ def load_garmin_user_data(member: dict[str, Any], range_days: int) -> dict[str, 
         log.warning("User %s unauthenticated: %s", uid, exc)
         return None
 
+    range_days = (range_end - range_start).days + 1
     today = date.today()
-    start = today - timedelta(days=range_days - 1)
 
     try:
-        week_acts      = g.fetch_activities_last_n_days(client, range_days)
-        week_summaries = g.fetch_daily_summaries(client, start, range_days)
+        week_acts      = g.fetch_activities(client, range_start, range_end)
+        week_summaries = g.fetch_daily_summaries(client, range_start, range_days)
         bmi            = g.fetch_latest_bmi(client)
 
         # Fetch and cache profile picture if not already stored
@@ -122,6 +130,9 @@ def load_garmin_user_data(member: dict[str, Any], range_days: int) -> dict[str, 
 
         # Fetch Jan through current month of the current year
         months_to_fetch = [(today.year, mo) for mo in range(1, today.month + 1)]
+        # Include last month if range covers it and it's in a prior year (edge case)
+        if range_start.year == today.year and range_start.month not in [m for _, m in months_to_fetch]:
+            months_to_fetch.insert(0, (range_start.year, range_start.month))
 
         monthly_acts: dict[str, list] = {}
         monthly_bmis: dict[str, Any] = {}
@@ -130,7 +141,6 @@ def load_garmin_user_data(member: dict[str, Any], range_days: int) -> dict[str, 
             key      = f"{yr}-{mo:02d}"
             acts     = g.fetch_activities_for_month(client, yr, mo)
             mo_bmi   = g.fetch_bmi_for_month(client, yr, mo)
-            # Fall back to the latest known BMI if month has no measurement
             return key, acts, mo_bmi if mo_bmi is not None else bmi
 
         with ThreadPoolExecutor(max_workers=4) as pool:
@@ -152,7 +162,8 @@ def load_garmin_user_data(member: dict[str, Any], range_days: int) -> dict[str, 
             week_summaries=week_summaries,
             monthly_activities=monthly_acts,
             monthly_bmis=monthly_bmis,
-            range_days=range_days,
+            range_start=range_start,
+            range_end=range_end,
             bmi=bmi,
         )
     except Exception as exc:
@@ -185,7 +196,7 @@ def _build_month_from_normalised(acts: list[dict], year: int, month: int) -> dic
     }
 
 
-def load_strava_user_data(member: dict[str, Any], range_days: int) -> dict[str, Any] | None:
+def load_strava_user_data(member: dict[str, Any], range_start: date, range_end: date) -> dict[str, Any] | None:
     """Load activity data for a Strava-connected member."""
     uid = member["id"]
     if not sv.is_authenticated(uid):
@@ -193,10 +204,10 @@ def load_strava_user_data(member: dict[str, Any], range_days: int) -> dict[str, 
         return None
     try:
         today = date.today()
-        start = today - timedelta(days=range_days - 1)
+        range_days = (range_end - range_start).days + 1
 
         # Fetch current period activities (already normalised)
-        period_acts = sv.fetch_and_normalise(uid, start, today)
+        period_acts = sv.fetch_and_normalise(uid, range_start, range_end)
 
         # Build week flags from last 7 days for the activity dots
         week_start = today - timedelta(days=6)
@@ -732,10 +743,10 @@ def get_team():
     members = g.all_members()
     if not members:
         return jsonify([])
-    rd = _range_days(request.args.get("range", "1w"))
+    range_start, range_end = _range_dates(request.args.get("range", "thismonth"))
     results = []
     with ThreadPoolExecutor(max_workers=max(len(members), 1)) as pool:
-        fmap = {pool.submit(load_user_data, m, rd): m for m in members}
+        fmap = {pool.submit(load_user_data, m, range_start, range_end): m for m in members}
         for fut in as_completed(fmap):
             member = fmap[fut]
             try:
