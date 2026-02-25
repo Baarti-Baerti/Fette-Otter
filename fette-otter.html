@@ -1164,6 +1164,27 @@
         </button>
       </div>
 
+      <!-- ── STEP 1b: Garmin 2FA code ── -->
+      <div id="stepMfa" style="display:none">
+        <div style="text-align:center;margin-bottom:20px">
+          <div style="font-size:2rem;margin-bottom:8px">🔐</div>
+          <p style="font-weight:900;font-size:1rem;margin-bottom:6px">Two-factor authentication</p>
+          <p style="font-size:.82rem;color:var(--muted);line-height:1.5">Garmin sent a verification code to your email or authenticator app. Enter it below.</p>
+        </div>
+        <div class="field">
+          <label>Verification code</label>
+          <input type="text" id="mfaCodeInput" placeholder="123456" maxlength="8"
+            style="letter-spacing:.2em;font-size:1.2rem;font-weight:900;text-align:center"
+            oninput="this.value=this.value.replace(/\D/g,'')"
+            onkeydown="if(event.key==='Enter') submitMfa()">
+          <div class="field-hint">Check your email or authenticator app for the code</div>
+        </div>
+        <button class="btn-primary" id="mfaBtn" onclick="submitMfa()">
+          <span id="mfaBtnText">Verify & Join 🦦</span>
+        </button>
+        <button onclick="goToStep(1);clearModalMsg()" style="background:none;border:none;color:var(--muted);font-size:.8rem;font-weight:700;cursor:pointer;margin-top:10px;width:100%;text-align:center;padding:4px">← Back to login</button>
+      </div>
+
       <!-- ── STEP 2: Strava pending (redirecting…) ── -->
       <div id="step2" style="display:none;text-align:center;padding:20px 0">
         <div style="font-size:2.5rem;margin-bottom:12px">🟠</div>
@@ -2042,10 +2063,11 @@ document.getElementById('joinModal').addEventListener('click', function(e) {
 // ── Step navigation ───────────────────────────────────────────────
 function goToStep(n) {
   modalStep = n;
-  document.getElementById('step0').style.display = n === 0 ? 'block' : 'none';
-  document.getElementById('step1').style.display = n === 1 ? 'block' : 'none';
-  document.getElementById('step2').style.display = n === 2 ? 'block' : 'none';
-  document.getElementById('step3').style.display = n === 3 ? 'block' : 'none';
+  document.getElementById('step0').style.display   = n === 0 ? 'block' : 'none';
+  document.getElementById('step1').style.display   = n === 1 ? 'block' : 'none';
+  document.getElementById('stepMfa').style.display = n === 'mfa' ? 'block' : 'none';
+  document.getElementById('step2').style.display   = n === 2 ? 'block' : 'none';
+  document.getElementById('step3').style.display   = n === 3 ? 'block' : 'none';
 }
 
 // ── Provider choice ───────────────────────────────────────────────
@@ -2072,6 +2094,8 @@ function chooseProvider(provider) {
 }
 
 // ── Submit join (Garmin) ──────────────────────────────────────────
+let _pendingMfaToken = null;  // holds mfa_token between step 1 and MFA step
+
 async function submitJoin() {
   const name           = document.getElementById('nameInput').value.trim();
   const garminEmail    = document.getElementById('garminEmailInput').value.trim();
@@ -2093,6 +2117,16 @@ async function submitJoin() {
       body: JSON.stringify({ name, garmin_email: garminEmail, garmin_password: garminPassword }),
     });
     const data = await res.json();
+
+    // 2FA required
+    if (res.status === 202 && data.needs_mfa) {
+      _pendingMfaToken = data.mfa_token;
+      setJoinLoading(false);
+      goToStep('mfa');
+      setTimeout(() => document.getElementById('mfaCodeInput').focus(), 100);
+      return;
+    }
+
     if (!res.ok) { showModalMsg(data.error || `Error ${res.status}`, 'error'); setJoinLoading(false); return; }
 
     const member = data.member;
@@ -2105,6 +2139,54 @@ async function submitJoin() {
     showModalMsg(`Could not reach the server. (${err.message})`, 'error');
   } finally {
     setJoinLoading(false);
+  }
+}
+
+async function submitMfa() {
+  const otp = document.getElementById('mfaCodeInput').value.trim();
+  if (!otp) { showModalMsg('Please enter the verification code.', 'error'); return; }
+  if (!_pendingMfaToken) { showModalMsg('Session expired — please start again.', 'error'); goToStep(1); return; }
+
+  const btn  = document.getElementById('mfaBtn');
+  const text = document.getElementById('mfaBtnText');
+  btn.disabled = true;
+  text.textContent = 'Verifying…';
+  clearModalMsg();
+
+  try {
+    const res = await fetch(`${API_BASE}/api/members/join/mfa`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mfa_token: _pendingMfaToken, otp_code: otp }),
+    });
+    const data = await res.json();
+
+    if (res.status === 410) {
+      // Session expired on server
+      _pendingMfaToken = null;
+      showModalMsg('Verification session expired — please log in again.', 'error');
+      goToStep(1);
+      return;
+    }
+    if (!res.ok) {
+      showModalMsg(data.error || `Error ${res.status}`, 'error');
+      document.getElementById('mfaCodeInput').value = '';
+      document.getElementById('mfaCodeInput').focus();
+      return;
+    }
+
+    _pendingMfaToken = null;
+    const member = data.member;
+    saveSession(member);
+    Object.keys(dataCache).forEach(k => delete dataCache[k]);
+    await loadData(currentPeriod);
+    showSuccessScreen(member, data.rejoined, 'garmin');
+    goToStep(3);
+  } catch(err) {
+    showModalMsg(`Could not reach the server. (${err.message})`, 'error');
+  } finally {
+    btn.disabled = false;
+    text.textContent = 'Verify & Join 🦦';
   }
 }
 
