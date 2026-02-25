@@ -1479,7 +1479,6 @@ function renderLB(){
     { key:'walkKm',    label:'🚶 Walk',           fmt: u => fmtKm(u.walkKm),                                 unit:'km' },
     { key:'km',        label:'Total',             fmt: u => fmtKm(u.km),                                     unit:'km' },
     { key:'actKcal',   label:'Active Calories',   fmt: u => ((u.actKcal||0)/1000).toFixed(1)+'K',            unit:'' },
-    { key:'bmi',       label:'⚖️ BMI',            fmt: u => (u.bmi && u.bmi > 0) ? u.bmi.toFixed(1) : '—',  unit:'' },
   ];
   function fmtKm(v){ return (v||0) > 0 ? (v||0).toFixed(1) : '—'; }
 
@@ -1937,7 +1936,7 @@ function renderMonthly() {
   </div>`;
 
   const charts = MP_METRICS.map(metric => {
-    const W = 560, H = 200, pL = 44, pR = 16, pT = 14, pB = 28;
+    const W = 560, H = 230, pL = 44, pR = 16, pT = 20, pB = 28;
     const iW = W - pL - pR, iH = H - pT - pB;
     const nM = 12;
 
@@ -2001,7 +2000,13 @@ function renderMonthly() {
       svg += `<text x="${xPos(i)}" y="${H - 4}" text-anchor="middle" font-family="Nunito,sans-serif" font-size="9" fill="${future ? '#cbd5e1' : '#94a3b8'}" font-weight="700">${lbl}</text>`;
     });
 
-    // Per-user lines + dots
+    // Per-user lines + avatar dots
+    // We collect all clip path defs and image elements separately
+    // SVG <image> needs a <clipPath> defined in <defs> for circular cropping
+    let defs = '<defs>';
+    let imageEls = '';
+    const R = 9; // avatar radius in SVG units
+
     chartUsers.forEach(u => {
       const vals = allMonths.map((m, i) => {
         if (!m.hasData) return null;
@@ -2022,17 +2027,35 @@ function renderMonthly() {
         svg += `<polygon points="${areaPoints}" fill="${u.color}" opacity="0.07"/>`;
       }
 
-      // Line — connect only points that have data (skip null months)
+      // Line
       const linePoints = vals.map(({ i, v }) => `${xPos(i)},${yPos(v)}`).join(' ');
       svg += `<polyline points="${linePoints}" fill="none" stroke="${u.color}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" opacity="0.95"/>`;
 
-      // Dots
+      // Avatar dots — one per data month
       vals.forEach(({ i, v }) => {
-        svg += `<circle cx="${xPos(i)}" cy="${yPos(v)}" r="3.5" fill="${u.color}" stroke="#fff" stroke-width="1.5">
-          <title>${u.name.split(' ')[0]} · ${MONTH_NAMES[i]} ${currentYear}: ${metric.valFmt(v)}</title>
-        </circle>`;
+        const cx = xPos(i), cy = yPos(v);
+        const clipId = `clip-${metric.key}-u${u.id}-m${i}`;
+
+        // Outer coloured ring
+        svg += `<circle cx="${cx}" cy="${cy}" r="${R + 1.5}" fill="${u.color}" opacity="0.9"/>`;
+
+        if (u.picture) {
+          // Clip path for circular image
+          defs += `<clipPath id="${clipId}"><circle cx="${cx}" cy="${cy}" r="${R}"/></clipPath>`;
+          imageEls += `<image href="${u.picture}" x="${cx - R}" y="${cy - R}" width="${R * 2}" height="${R * 2}" clip-path="url(#${clipId})" preserveAspectRatio="xMidYMid slice">
+            <title>${u.name.split(' ')[0]} · ${MONTH_NAMES[i]} ${currentYear}: ${metric.valFmt(v)}</title>
+          </image>`;
+        } else {
+          // Fallback: coloured circle with first letter
+          svg += `<circle cx="${cx}" cy="${cy}" r="${R}" fill="${u.bg}"/>`;
+          svg += `<text x="${cx}" y="${cy + 3.5}" text-anchor="middle" font-family="Nunito,sans-serif" font-size="9" font-weight="900" fill="${u.color}">${u.name[0]}</text>`;
+        }
       });
     });
+
+    defs += '</defs>';
+    // Prepend defs, append images on top of everything else
+    svg = defs + svg + imageEls;
 
     // BMI reference bands (healthy range 18.5–25)
     if (metric.skipZero) {
@@ -2049,7 +2072,7 @@ function renderMonthly() {
       <div class="mp-chart-title">${metric.label} — ${currentYear}</div>
       ${subtitle}
       <div style="overflow-x:auto">
-        <svg width="100%" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" style="display:block;min-width:320px">${svg}</svg>
+        <svg width="100%" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" style="display:block;min-width:320px;overflow:visible">${svg}</svg>
       </div>
     </div>`;
   }).join('');
