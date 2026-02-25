@@ -707,9 +707,22 @@ def debug_user(user_id: int):
 
     try:
         bmi = g.fetch_latest_bmi(client)
+        height_m = g.fetch_user_height(client)
         results["steps"]["bmi"] = f"OK — {bmi}"
+        results["steps"]["height_m"] = f"OK — {height_m}"
     except Exception as exc:
         results["steps"]["bmi"] = f"FAILED: {type(exc).__name__}: {exc}"
+
+    # Raw weight API response for diagnosis
+    try:
+        from garmin.fetcher import fetch_body_composition
+        raw = fetch_body_composition(client, today - timedelta(days=365), today)
+        entries = raw.get("dateWeightList") or raw.get("allWeightMetrics") or []
+        results["steps"]["weight_raw_keys"] = list(raw.keys())
+        results["steps"]["weight_entry_count"] = len(entries)
+        results["steps"]["weight_sample"] = entries[-3:] if entries else []
+    except Exception as exc:
+        results["steps"]["weight_raw"] = f"FAILED: {type(exc).__name__}: {exc}"
 
     return jsonify(results)
 
