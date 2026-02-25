@@ -1,4 +1,7 @@
-from .session import get_client, login_and_save, is_authenticated
+from .session import (
+    get_client, login_and_save, is_authenticated,
+    login_start, store_pending_mfa, complete_mfa_login, save_client,
+)
 from .fetcher import (
     fetch_daily_summaries,
     fetch_activities,
@@ -20,6 +23,7 @@ from .registry import (
 
 __all__ = [
     "get_client", "login_and_save", "is_authenticated",
+    "login_start", "store_pending_mfa", "complete_mfa_login", "save_client",
     "fetch_daily_summaries", "fetch_activities",
     "fetch_activities_last_n_days", "fetch_activities_for_month",
     "fetch_latest_bmi", "fetch_profile_picture", "ACTIVITY_TYPE_MAP",

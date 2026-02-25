@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import os
+import secrets
 from pathlib import Path
+from typing import Any
 
 import garth
 from garth.exc import GarthException, GarthHTTPError
@@ -35,11 +37,63 @@ def save_client(client: garth.Client, user_id: int) -> None:
         os.chmod(f, 0o644)
 
 
-def login_and_save(user_id: int, email: str, password: str) -> garth.Client:
+# ── In-memory store for pending MFA sessions ─────────────────────
+# { mfa_token: { "client": garth.Client, "resume_data": any,
+#                "user_id": int, "member": dict, "is_new": bool } }
+_pending_mfa: dict[str, dict[str, Any]] = {}
+
+
+def login_start(email: str, password: str) -> tuple[str, Any]:
+    """
+    Begin login. Returns ("ok", client) on success,
+    or ("needs_mfa", (client, resume_data)) when 2FA is required.
+    """
     client = garth.Client()
-    client.login(email, password)
-    save_client(client, user_id)
-    return client
+    result = client.login(email, password, return_on_mfa=True)
+
+    if isinstance(result, tuple) and len(result) == 2 and result[0] == "needs_mfa":
+        return "needs_mfa", (client, result[1])
+
+    # No MFA — login completed
+    return "ok", client
+
+
+def store_pending_mfa(client: garth.Client, resume_data: Any,
+                      user_id: int, member: dict, is_new: bool) -> str:
+    """Store a partial MFA session; returns a short-lived token for the client."""
+    token = secrets.token_urlsafe(32)
+    _pending_mfa[token] = {
+        "client":      client,
+        "resume_data": resume_data,
+        "user_id":     user_id,
+        "member":      member,
+        "is_new":      is_new,
+    }
+    return token
+
+
+def complete_mfa_login(mfa_token: str, otp_code: str) -> garth.Client:
+    """
+    Complete a pending MFA login with the OTP code.
+    Raises KeyError if token unknown, GarthHTTPError if OTP wrong.
+    """
+    pending = _pending_mfa.pop(mfa_token, None)
+    if pending is None:
+        raise KeyError("MFA session not found or expired — please start login again.")
+
+    client: garth.Client = pending["client"]
+    resume_data = pending["resume_data"]
+
+    client.resume_login(resume_data, otp_code)
+    return client, pending["user_id"], pending["member"], pending["is_new"]
+
+
+def login_and_save(user_id: int, email: str, password: str) -> garth.Client:
+    status, result = login_start(email, password)
+    if status == "needs_mfa":
+        raise ValueError("MFA_REQUIRED")
+    save_client(result, user_id)
+    return result
 
 
 def is_authenticated(user_id: int) -> bool:
