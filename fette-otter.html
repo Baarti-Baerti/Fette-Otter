@@ -1751,10 +1751,14 @@ function renderPoints(){
     ? users.filter(u => (ytdRunKm[u.id]||0) === maxYtdRun).map(u => u.id)
     : [];
 
-  // Rule C: user with most Rule A points this year = +2pts
+  // Rule C: only the user with STRICTLY most Rule A points gets +2pts.
+  // If two or more users are tied at the top, nobody gets the bonus.
   const maxRuleA = Math.max(...Object.values(ruleAPoints), 0);
-  const ruleCWinners = maxRuleA > 0
-    ? users.filter(u => ruleAPoints[u.id] === maxRuleA).map(u => u.id)
+  const ruleCCandidates = maxRuleA > 0
+    ? users.filter(u => ruleAPoints[u.id] === maxRuleA)
+    : [];
+  const ruleCWinners = ruleCCandidates.length === 1
+    ? ruleCCandidates.map(u => u.id)
     : [];
 
   // Rule D: biggest BMI improvement (Jan BMI → most recent month's BMI) = +1pt
@@ -1775,8 +1779,12 @@ function renderPoints(){
     ruleDImprovement[u.id] = improvement;
   });
   const maxImprovement = Math.max(...Object.values(ruleDImprovement), 0);
-  const ruleDWinners = maxImprovement > 0
-    ? users.filter(u => (ruleDImprovement[u.id] || 0) === maxImprovement).map(u => u.id)
+  // Rule D: only award if improvement > 0 AND strictly one winner (no tie)
+  const ruleDCandidates = maxImprovement > 0
+    ? users.filter(u => (ruleDImprovement[u.id] || 0) === maxImprovement)
+    : [];
+  const ruleDWinners = ruleDCandidates.length === 1
+    ? ruleDCandidates.map(u => u.id)
     : [];
 
   // Total points
@@ -1827,13 +1835,10 @@ function renderPoints(){
         // Future month
         return `<td style="color:#e2e8f8;font-size:.9rem">·</td>`;
       }
-      // Past month — show filled/empty dot with km on hover
+      // Past month — show km, green if hit, red if missed
       const hit = (km || 0) >= GOAL;
       const val = km != null ? km.toFixed(1) : '0.0';
-      return `<td title="${MONTH_NAMES[m-1]}: ${val}km${hit?' ✅ (goal hit)':' ❌ (goal missed, need '+GOAL+'km)'}">
-        <span style="font-size:1rem;color:${hit?'#059669':'#e2e8f8'}">●</span>
-        ${hit?`<div style="font-size:.55rem;color:#059669;font-weight:700;line-height:1">${val}</div>`:''}
-      </td>`;
+      return `<td title="${MONTH_NAMES[m-1]}: ${val}km${hit?' ✅ (goal hit)':' ❌ (goal missed, need '+GOAL+'km)'}" style="font-size:.65rem;font-weight:800;color:${hit?'#059669':'#ef4444'}">${val}</td>`;
     }).join('');
 
     const ruleA = ruleAPoints[u.id] || 0;
@@ -1854,17 +1859,17 @@ function renderPoints(){
       <td style="color:#818cf8;font-weight:900;border-left:2px solid var(--border)">${ruleA}</td>
       <td style="color:${hasB?'#34d399':'var(--muted)'};font-weight:${hasB?900:600}">${hasB?'+2':'—'}</td>
       <td style="color:${hasC?'#f472b6':'var(--muted)'};font-weight:${hasC?900:600}">${hasC?'+2':'—'}</td>
-      <td style="color:${hasD?'#fb923c':impD!=null?'var(--muted)':'#e2e8f8'};font-weight:${hasD?900:600}" title="${impD!=null?'BMI change: '+(impD>0?'−':'+')+Math.abs(impD).toFixed(1):'No BMI data'}">${hasD?'+1':impD!=null?impD.toFixed(1):'—'}</td>
+      <td style="color:${hasD?'#fb923c':'var(--muted)'};font-weight:${hasD?900:600}" title="${impD!=null?'BMI change: '+(impD>0?'−':'+')+Math.abs(impD).toFixed(1):'No BMI data'}">${hasD?'+1':'—'}</td>
       <td style="border-left:2px solid var(--border)"><span class="pts-total">${total}</span></td>
     </tr>`;
   }).join('');
 
   const legend = `<div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:18px;font-size:0.7rem;font-weight:700;color:var(--muted)">
-    <span><span style="color:#059669">●</span> = ≥${GOAL}km running that month (+1pt)</span>
+    <span><span style="color:#059669">green</span> = ≥${GOAL}km (goal hit, +1pt) · <span style="color:#ef4444">red</span> = goal missed</span>
     <span style="color:#818cf8">A: +1pt / qualifying month</span>
     <span style="color:#34d399">B: most YTD run km = +2pts</span>
-    <span style="color:#f472b6">C: most Rule A pts = +2pts</span>
-    <span style="color:#fb923c">D: biggest BMI drop Jan→latest = +1pt (Garmin only)</span>
+    <span style="color:#f472b6">C: sole leader in Rule A = +2pts (no bonus if tied)</span>
+    <span style="color:#fb923c">D: biggest BMI drop Jan→latest = +1pt (Garmin only, no bonus if tied)</span>
     <span style="color:var(--violet)">Current month shown in progress, not yet scored</span>
   </div>`;
 
@@ -1925,16 +1930,7 @@ function renderMonthly() {
     return { label, mo, hasData: mo <= currentMonth, dataMonth };
   });
 
-  // Legend row
-  const legend = `<div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:6px;padding:12px 20px 0">
-    ${users.map(u => {
-      const pic = u.picture
-        ? `<img src="${u.picture}" style="width:18px;height:18px;border-radius:5px;object-fit:cover;margin-right:5px;vertical-align:middle;flex-shrink:0">`
-        : `<span style="margin-right:4px;font-size:.8rem">${u.emoji}</span>`;
-      const dot = `<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${u.color};margin-right:5px;vertical-align:middle"></span>`;
-      return `<span style="display:inline-flex;align-items:center;font-size:.72rem;font-weight:800;color:var(--text2)">${pic}${dot}${u.name.split(' ')[0]}</span>`;
-    }).join('')}
-  </div>`;
+  // No separate legend — user identity is shown directly on the chart avatar dots
 
   const charts = MP_METRICS.map(metric => {
     const W = 340, H = 170, pL = 36, pR = 10, pT = 16, pB = 22;
@@ -2079,7 +2075,7 @@ function renderMonthly() {
   }).join('');
 
   document.getElementById('mpUserRow').innerHTML = '';
-  document.getElementById('mpCharts').innerHTML = legend + charts;
+  document.getElementById('mpCharts').innerHTML = charts;
 }
 
 function pickMpUser(id) {
