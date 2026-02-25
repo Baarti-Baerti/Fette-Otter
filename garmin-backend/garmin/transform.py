@@ -225,29 +225,33 @@ def build_user_payload(
     roster_entry: dict[str, Any],
     week_activities: list[dict[str, Any]],
     week_summaries: list[dict[str, Any]],
-    monthly_activities: dict[str, list[dict[str, Any]]],  # key: "YYYY-MM"
-    monthly_bmis: dict[str, float | None],                # key: "YYYY-MM"
-    range_days: int = 7,
+    monthly_activities: dict[str, list[dict[str, Any]]],
+    monthly_bmis: dict[str, float | None],
+    range_start: date | None = None,
+    range_end: date | None = None,
+    range_days: int = 7,   # kept for backward compat, ignored if range_start provided
     bmi: float | None = None,
 ) -> dict[str, Any]:
     """
     Assemble the complete user data object the dashboard frontend needs.
-
-    Args:
-        roster_entry:       Config entry from config/team.py
-        week_activities:    Activities list for the selected week range
-        week_summaries:     Daily summary list for the same range
-        monthly_activities: Dict of "YYYY-MM" -> activity list, 12 months
-        monthly_bmis:       Dict of "YYYY-MM" -> BMI float or None
-        range_days:         1, 7, or 28 (today / 1W / 4W selector)
-        bmi:                Most recent BMI for this user
     """
+    today = date.today()
+    # Determine the exact date window for the overview leaderboard split
+    if range_start is None:
+        range_start = today - timedelta(days=range_days - 1)
+    if range_end is None:
+        range_end = today
+
     week = build_week_summary(week_activities, week_summaries, range_days)
 
     # Build monthly array: Jan → current month of current year
     monthly = []
-    today = date.today()
     months_keys: list[tuple[int, int]] = [(today.year, mo) for mo in range(1, today.month + 1)]
+    # Also include last month if range_start is in the prior month (e.g. "last month" in January)
+    if range_start.month != today.month or range_start.year != today.year:
+        lm = (range_start.year, range_start.month)
+        if lm not in months_keys:
+            months_keys = [lm] + months_keys
 
     for (yr, mo) in months_keys:
         key = f"{yr}-{mo:02d}"
@@ -255,42 +259,40 @@ def build_user_payload(
         m_bmi = monthly_bmis.get(key, bmi)
         monthly.append(build_month_summary(acts, m_bmi, yr, mo))
 
-    # Derive split km directly from monthly data so the overview leaderboard
-    # is always consistent with the points table (both use the same monthly fetches).
-    # Sum only the months covered by the selected range_days window.
-    today_dt = date.today()
-    range_start = today_dt - timedelta(days=range_days - 1)
-    range_split = _split_km([
+    # Derive split km from monthly data filtered to the exact range window.
+    # This guarantees overview leaderboard matches the points table.
+    range_start_str = range_start.isoformat()
+    range_end_str   = range_end.isoformat()
+    range_acts = [
         a
         for (yr, mo) in months_keys
         for a in [_normalise_activity(raw) for raw in monthly_activities.get(f"{yr}-{mo:02d}", [])]
-        if a["date"] >= range_start.isoformat()
-    ])
+        if range_start_str <= a["date"] <= range_end_str
+    ]
+    range_split = _split_km(range_acts)
 
     # Derive activity types from recent activities
     recent_norms = [_normalise_activity(a) for a in week_activities]
-    seen_types = list(dict.fromkeys(
-        a["type"] for a in recent_norms if a["type"]
-    ))
+    seen_types = list(dict.fromkeys(a["type"] for a in recent_norms if a["type"]))
     types = seen_types or roster_entry.get("types", [])
 
     return {
         **{k: roster_entry[k] for k in ("id", "name", "role", "emoji", "color", "bg", "garminDevice")},
-        "types":       types,
-        "calories":    week["calories"],
-        "workouts":    week["workouts"],
-        "km":          week["km"],
-        "runKm":       range_split["runKm"],
-        "cycleKm":     range_split["cycleKm"],
-        "virtualKm":   range_split["virtualKm"],
-        "swimKm":      range_split["swimKm"],
-        "skiKm":       range_split["skiKm"],
-        "walkKm":      range_split["walkKm"],
-        "otherKm":     range_split["otherKm"],
-        "actKcal":     week["actKcal"],
-        "bmi":         round(bmi, 1) if bmi else 0.0,
-        "week":        week["week"],
+        "types":        types,
+        "calories":     week["calories"],
+        "workouts":     len(range_acts),
+        "km":           round(sum(a["distance_m"] for a in range_acts) / 1000, 1),
+        "runKm":        range_split["runKm"],
+        "cycleKm":      range_split["cycleKm"],
+        "virtualKm":    range_split["virtualKm"],
+        "swimKm":       range_split["swimKm"],
+        "skiKm":        range_split["skiKm"],
+        "walkKm":       range_split["walkKm"],
+        "otherKm":      range_split["otherKm"],
+        "actKcal":      week["actKcal"],
+        "bmi":          round(bmi, 1) if bmi else 0.0,
+        "week":         week["week"],
         "weekCalories": week["weekCalories"],
-        "kmByType":    week.get("kmByType", {}),
-        "monthly":     monthly,
+        "kmByType":     _km_by_type(range_acts),
+        "monthly":      monthly,
     }
