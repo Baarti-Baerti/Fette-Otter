@@ -714,6 +714,13 @@ def debug_user(user_id: int):
         start = today - timedelta(days=6)
         sums = g.fetch_daily_summaries(client, start, 7)
         results["steps"]["summaries"] = f"OK — {len(sums)} days"
+        # Show keys and totalSteps from first non-empty summary
+        for s in sums:
+            if s.get("calendarDate") and len(s) > 1:
+                results["steps"]["summary_keys"] = list(s.keys())[:20]
+                results["steps"]["summary_totalSteps"] = s.get("totalSteps")
+                results["steps"]["summary_sample"] = {k: s.get(k) for k in ["totalSteps","steps","stepGoal","dailyStepGoal","totalDistanceMeters","activeKilocalories"] if k in s}
+                break
     except Exception as exc:
         results["steps"]["summaries"] = f"FAILED: {type(exc).__name__}: {exc}"
 
