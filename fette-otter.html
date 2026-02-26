@@ -1985,14 +1985,24 @@ function renderMonthly() {
     }
 
     const maxV = Math.max(...allVals);
-    // For BMI use a tight scale (±3 around the range) so differences are visible
-    const minV = metric.skipZero ? Math.max(0, Math.min(...allVals) - 2) : 0;
-    const rangeV = maxV - minV || 1;
+    // For BMI: always include the healthy range (18.5–25) in the scale so the band is visible
+    const minV = metric.skipZero
+      ? Math.max(0, Math.min(...allVals, 18.5) - 2)
+      : 0;
+    const adjMaxV = metric.skipZero ? Math.max(maxV, 25) + 1 : maxV;
+    const rangeV = adjMaxV - minV || 1;
 
     const xPos = i => pL + (i / (nM - 1)) * iW;
     const yPos = v => pT + iH * (1 - (v - minV) / rangeV);
 
     let svg = '';
+
+    // BMI healthy band drawn first so it sits behind everything
+    if (metric.skipZero) {
+      const y1 = yPos(25), y2 = yPos(18.5);
+      svg += `<rect x="${pL}" y="${Math.min(y1,y2)}" width="${iW}" height="${Math.abs(y2-y1)}" fill="#22c55e" opacity="0.12"/>`;
+      svg += `<text x="${W - pR - 2}" y="${Math.min(y1,y2) - 2}" text-anchor="end" font-family="Nunito,sans-serif" font-size="7" fill="#22c55e" font-weight="800">Healthy</text>`;
+    }
 
     // Shade future months
     const futureStart = xPos(currentMonth);
@@ -2068,13 +2078,6 @@ function renderMonthly() {
     defs += '</defs>';
     // Prepend defs, append images on top of everything else
     svg = defs + svg + imageEls;
-
-    // BMI reference bands (healthy range 18.5–25)
-    if (metric.skipZero) {
-      const y1 = yPos(25), y2 = yPos(18.5);
-      svg += `<rect x="${pL}" y="${Math.min(y1,y2)}" width="${iW}" height="${Math.abs(y2-y1)}" fill="#22c55e" opacity="0.06"/>`;
-      svg += `<text x="${W - pR - 2}" y="${y1 - 2}" text-anchor="end" font-family="Nunito,sans-serif" font-size="7" fill="#22c55e" font-weight="800">Healthy</text>`;
-    }
 
     const subtitle = metric.skipZero
       ? `<div style="font-size:.68rem;color:var(--muted);font-weight:700;margin-bottom:10px">Garmin users with weight data only · Green band = healthy range (18.5–25)</div>`
