@@ -703,53 +703,74 @@ def debug_user(user_id: int):
         return jsonify({"step": "get_client", "error": str(exc), "type": type(exc).__name__})
 
     today = date.today()
-    results = {"username": username, "member": member["name"], "steps": {}}
+    start7 = today - timedelta(days=6)
+    from garmin.fetcher import _date_str
+    results = {"username": username, "member": member["name"], "steps_debug": {}}
 
-    # Test each API call individually
-    try:
-        acts = g.fetch_activities_last_n_days(client, 7)
-        results["steps"]["activities"] = f"OK — {len(acts)} activities"
-    except Exception as exc:
-        results["steps"]["activities"] = f"FAILED: {type(exc).__name__}: {exc}"
+    # Raw probe of every plausible steps endpoint — capture response or error explicitly
+    probes = [
+        ("range_endpoint", lambda: client.connectapi(
+            "/usersummary-service/usersummary/daily/range",
+            params={"startDate": _date_str(start7), "endDate": _date_str(today)},
+        )),
+        ("daily_today", lambda: client.connectapi(
+            f"/usersummary-service/usersummary/daily/{today}",
+            params={"calendarDate": str(today)},
+        )),
+        ("wellness_movement_today", lambda: client.connectapi(
+            f"/wellness-service/wellness/dailyMovement/{today}",
+        )),
+        ("wellness_daily_today", lambda: client.connectapi(
+            f"/wellness-service/wellness/daily/{today}",
+            params={"date": str(today)},
+        )),
+        ("userstats_today", lambda: client.connectapi(
+            "/userstats-service/userstats/timeline",
+            params={"startDate": str(start7), "endDate": str(today)},
+        )),
+    ]
 
-    try:
-        start = today - timedelta(days=6)
-        sums = g.fetch_daily_summaries(client, start, 7)
-        results["steps"]["summaries"] = f"OK — {len(sums)} days"
-        # Show keys and totalSteps from first non-empty summary
-        for s in sums:
-            if s.get("calendarDate") and len(s) > 1:
-                results["steps"]["summary_keys"] = list(s.keys())[:20]
-                results["steps"]["summary_totalSteps"] = s.get("totalSteps")
-                results["steps"]["summary_sample"] = {k: s.get(k) for k in ["totalSteps","steps","stepGoal","dailyStepGoal","totalDistanceMeters","activeKilocalories"] if k in s}
-                break
-    except Exception as exc:
-        results["steps"]["summaries"] = f"FAILED: {type(exc).__name__}: {exc}"
+    def _safe_probe(fn):
+        try:
+            resp = fn()
+            if isinstance(resp, list):
+                return {"type": "list", "len": len(resp), "sample": resp[:2]}
+            if isinstance(resp, dict):
+                return {"type": "dict", "keys": list(resp.keys())[:15],
+                        "totalSteps": resp.get("totalSteps"),
+                        "steps": resp.get("steps"),
+                        "sample": {k: resp[k] for k in list(resp.keys())[:8]}}
+            return {"type": str(type(resp)), "value": str(resp)[:200]}
+        except Exception as exc:
+            return {"error": f"{type(exc).__name__}: {exc}"}
 
+    for name, fn in probes:
+        results["steps_debug"][name] = _safe_probe(fn)
+
+    # Also run fetch_steps_range and show result
     try:
-        steps = g.fetch_steps_range(client, today - timedelta(days=6), today)
-        results["steps"]["steps_7d"] = steps
+        steps = g.fetch_steps_range(client, start7, today)
+        results["steps_debug"]["fetch_steps_range_result"] = steps
     except Exception as exc:
-        results["steps"]["steps_7d"] = f"FAILED: {type(exc).__name__}: {exc}"
+        results["steps_debug"]["fetch_steps_range_result"] = f"FAILED: {exc}"
 
     try:
         bmi = g.fetch_latest_bmi(client)
         height_m = g.fetch_user_height(client)
-        results["steps"]["bmi"] = f"OK — {bmi}"
-        results["steps"]["height_m"] = f"OK — {height_m}"
+        results["steps_debug"]["bmi"] = f"OK — {bmi}"
+        results["steps_debug"]["height_m"] = f"OK — {height_m}"
     except Exception as exc:
-        results["steps"]["bmi"] = f"FAILED: {type(exc).__name__}: {exc}"
+        results["steps_debug"]["bmi"] = f"FAILED: {type(exc).__name__}: {exc}"
 
     # Raw weight API response for diagnosis
     try:
         from garmin.fetcher import fetch_body_composition
         raw = fetch_body_composition(client, today - timedelta(days=365), today)
         entries = raw.get("dateWeightList") or raw.get("allWeightMetrics") or []
-        results["steps"]["weight_raw_keys"] = list(raw.keys())
-        results["steps"]["weight_entry_count"] = len(entries)
-        results["steps"]["weight_sample"] = entries[-3:] if entries else []
+        results["steps_debug"]["weight_raw_keys"] = list(raw.keys())
+        results["steps_debug"]["weight_entry_count"] = len(entries)
     except Exception as exc:
-        results["steps"]["weight_raw"] = f"FAILED: {type(exc).__name__}: {exc}"
+        results["steps_debug"]["weight_raw"] = f"FAILED: {type(exc).__name__}: {exc}"
 
     return jsonify(results)
 
