@@ -1584,6 +1584,7 @@ function renderDetail(){
       <div class="detail-item"><div class="detail-item-lbl">Sessions</div><div class="detail-item-val" style="color:${u.color}">${u.workouts}</div></div>
       <div class="detail-item"><div class="detail-item-lbl">Distance</div><div class="detail-item-val">${u.km}<span style="font-size:.9rem">km</span></div></div>
       <div class="detail-item"><div class="detail-item-lbl">Act. Kcal</div><div class="detail-item-val">${(u.actKcal/1000).toFixed(1)}K</div></div>
+      ${u.bmi && u.bmi > 0 ? `<div class="detail-item"><div class="detail-item-lbl">BMI</div><div class="detail-item-val" style="color:${u.bmi<18.5?'#f59e0b':u.bmi<25?'#059669':u.bmi<30?'#f59e0b':'#ef4444'}">${u.bmi.toFixed(1)}</div></div>` : ''}
     </div>
     <div style="font-size:.65rem;color:var(--muted);margin:16px 0 8px;font-weight:700;letter-spacing:.06em;text-transform:uppercase">Distance by activity</div>
     ${distBreakdown}
@@ -1824,22 +1825,22 @@ function renderPoints(){
       const isPast    = m < currentMonth;
       const isCurrent = m === currentMonth;
       const km = runMap[m];
+      const mData = (u.monthly||[]).find(md => md.year === currentYear && md.month === m);
+      const bmi = mData?.bmi && mData.bmi > 0 ? mData.bmi : null;
+      const bmiLine = bmi ? `<div style="font-size:.55rem;color:var(--muted);font-weight:600;line-height:1.2;margin-top:2px">${bmi.toFixed(1)}</div>` : '';
 
       if (isCurrent) {
-        // Show current month progress in muted style
         const val = km != null ? km.toFixed(1) : '…';
-        const pct = km != null ? Math.min(100, Math.round(km/GOAL*100)) : 0;
         const col = km >= GOAL ? '#059669' : '#f59e0b';
-        return `<td title="${MONTH_NAMES[m-1]}: ${val}km (in progress, goal ${GOAL}km)" style="font-size:.65rem;color:${col}">${val}</td>`;
+        return `<td title="${MONTH_NAMES[m-1]}: ${val}km (in progress, goal ${GOAL}km)" style="font-size:.65rem;color:${col}">${val}${bmiLine}</td>`;
       }
       if (!isPast) {
-        // Future month
         return `<td style="color:#e2e8f8;font-size:.9rem">·</td>`;
       }
       // Past month — show km, green if hit, red if missed
       const hit = (km || 0) >= GOAL;
       const val = km != null ? km.toFixed(1) : '0.0';
-      return `<td title="${MONTH_NAMES[m-1]}: ${val}km${hit?' ✅ (goal hit)':' ❌ (goal missed, need '+GOAL+'km)'}" style="font-size:.65rem;font-weight:800;color:${hit?'#059669':'#ef4444'}">${val}</td>`;
+      return `<td title="${MONTH_NAMES[m-1]}: ${val}km${hit?' ✅ (goal hit)':' ❌ (goal missed, need '+GOAL+'km)'}" style="font-size:.65rem;font-weight:800;color:${hit?'#059669':'#ef4444'}">${val}${bmiLine}</td>`;
     }).join('');
 
     const ruleA = ruleAPoints[u.id] || 0;
@@ -1849,11 +1850,24 @@ function renderPoints(){
     const impD  = ruleDImprovement[u.id];
     const total = totalPoints[u.id] || 0;
 
+    const janBmiVal  = (u.monthly||[]).find(m => m.year===currentYear && m.month===1)?.bmi;
+    const latestBmiVal = [...(u.monthly||[])]
+      .filter(m => m.year===currentYear && m.month <= currentMonth && m.bmi && m.bmi > 0)
+      .sort((a,b) => b.month - a.month)[0]?.bmi;
+    const bmiSubline = (janBmiVal && janBmiVal > 0)
+      ? `<div style="font-size:.58rem;color:var(--muted);font-weight:700;margin-top:2px">
+           ⚖️ Jan: ${janBmiVal.toFixed(1)}${latestBmiVal && latestBmiVal !== janBmiVal ? ` → <span style="color:${latestBmiVal < janBmiVal ? '#059669' : '#ef4444'}">${latestBmiVal.toFixed(1)}</span>` : ''}
+         </div>`
+      : '';
+
     return `<tr>
       <td>
         <div style="display:flex;align-items:center;gap:7px">
           <div style="width:24px;height:24px;border-radius:7px;background:${u.bg};display:flex;align-items:center;justify-content:center;font-size:.8rem;flex-shrink:0;overflow:hidden">${u.picture?`<img src="${u.picture}" style="width:100%;height:100%;object-fit:cover;border-radius:7px">`:u.emoji}</div>
-          <span style="font-weight:800;font-size:.8rem">${u.name}</span>
+          <div>
+            <span style="font-weight:800;font-size:.8rem">${u.name}</span>
+            ${bmiSubline}
+          </div>
         </div>
       </td>
       ${monthCells}
