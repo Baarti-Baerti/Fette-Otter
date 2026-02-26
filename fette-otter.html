@@ -1481,7 +1481,6 @@ function renderLB(){
     { key:'walkKm',    label:'🚶 Walk',           fmt: u => fmtKm(u.walkKm),                                 unit:'km' },
     { key:'km',        label:'Total',             fmt: u => fmtKm(u.km),                                     unit:'km' },
     { key:'actKcal',   label:'Active Calories',   fmt: u => ((u.actKcal||0)/1000).toFixed(1)+'K',                                     unit:'' },
-    { key:'steps',     label:'👣 Steps',           fmt: u => (u.steps && u.steps > 0) ? (u.steps>=1000 ? (u.steps/1000).toFixed(1)+'K' : u.steps) : '—', unit:'' },
   ];
   function fmtKm(v){ return (v||0) > 0 ? (v||0).toFixed(1) : '—'; }
 
