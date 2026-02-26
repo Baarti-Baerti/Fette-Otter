@@ -120,6 +120,7 @@ def load_garmin_user_data(member: dict[str, Any], range_start: date, range_end: 
         week_acts      = g.fetch_activities(client, range_start, range_end)
         week_summaries = g.fetch_daily_summaries(client, range_start, range_days)
         bmi            = g.fetch_latest_bmi(client)
+        steps          = g.fetch_steps_range(client, range_start, range_end)
 
         # Fetch and cache profile picture if not already stored
         if not member.get("picture"):
@@ -165,6 +166,7 @@ def load_garmin_user_data(member: dict[str, Any], range_start: date, range_end: 
             range_start=range_start,
             range_end=range_end,
             bmi=bmi,
+            steps=steps,
         )
     except Exception as exc:
         log.exception("Garmin fetch failed user %s: %s", uid, exc)
@@ -723,6 +725,12 @@ def debug_user(user_id: int):
                 break
     except Exception as exc:
         results["steps"]["summaries"] = f"FAILED: {type(exc).__name__}: {exc}"
+
+    try:
+        steps = g.fetch_steps_range(client, today - timedelta(days=6), today)
+        results["steps"]["steps_7d"] = steps
+    except Exception as exc:
+        results["steps"]["steps_7d"] = f"FAILED: {type(exc).__name__}: {exc}"
 
     try:
         bmi = g.fetch_latest_bmi(client)
