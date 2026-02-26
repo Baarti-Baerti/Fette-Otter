@@ -137,7 +137,15 @@ def build_week_summary(
     for s in summaries:
         d = s.get("calendarDate", "")
         daily_active[d] = int(s.get("activeKilocalories") or 0)
-        total_steps += int(s.get("totalSteps") or 0)
+        # Garmin may return steps under different field names depending on endpoint/device
+        step_val = (
+            s.get("totalSteps")
+            or s.get("steps")
+            or s.get("dailySteps")
+            or s.get("stepCount")
+            or 0
+        )
+        total_steps += int(step_val or 0)
 
     # Per-day activity flags and calorie totals
     day_flags = []
