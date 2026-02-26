@@ -131,11 +131,13 @@ def build_week_summary(
     week_start = today - timedelta(days=6)
     week_dates = [(week_start + timedelta(days=i)).isoformat() for i in range(7)]
 
-    # Daily active kcal: prefer daily summary activeKilocalories, fall back to activity sum
+    # Daily active kcal and steps from daily summaries
     daily_active: dict[str, int] = {}
+    total_steps = 0
     for s in summaries:
         d = s.get("calendarDate", "")
         daily_active[d] = int(s.get("activeKilocalories") or 0)
+        total_steps += int(s.get("totalSteps") or 0)
 
     # Per-day activity flags and calorie totals
     day_flags = []
@@ -159,6 +161,7 @@ def build_week_summary(
         "workouts":    len(total_activities),
         "km":          _km(sum(a["distance_m"] for a in total_activities)),
         "actKcal":     int(sum(a["active_kcal"] for a in total_activities) * scale),
+        "steps":       total_steps,
         "week":        day_flags,
         "weekCalories": day_cals,
         "kmByType":    _km_by_type(total_activities),
@@ -290,6 +293,7 @@ def build_user_payload(
         "walkKm":       range_split["walkKm"],
         "otherKm":      range_split["otherKm"],
         "actKcal":      week["actKcal"],
+        "steps":        week.get("steps", 0),
         "bmi":          round(bmi, 1) if bmi else 0.0,
         "week":         week["week"],
         "weekCalories": week["weekCalories"],
