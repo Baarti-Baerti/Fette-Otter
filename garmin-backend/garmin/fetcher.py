@@ -65,6 +65,62 @@ def fetch_daily_summaries(
     return results
 
 
+def fetch_steps_range(client: garth.Client, start: date, end: date) -> int:
+    """
+    Returns total steps between start and end (inclusive).
+    Tries several known Garmin endpoints, returns 0 if none work.
+    """
+    total = 0
+
+    # Strategy 1: /usersummary-service/usersummary/daily/range — bulk daily summaries
+    try:
+        data = client.connectapi(
+            "/usersummary-service/usersummary/daily/range",
+            params={"startDate": _date_str(start), "endDate": _date_str(end)},
+        )
+        # Response is either a list or {"dailySummaries": [...]}
+        entries = data if isinstance(data, list) else data.get("dailySummaries") or data.get("allSummaries") or []
+        if entries:
+            for e in entries:
+                total += int(e.get("totalSteps") or e.get("steps") or 0)
+            return total
+    except Exception:
+        pass
+
+    # Strategy 2: /wellness-service/wellness/dailyMovement/{date} — per-day steps
+    try:
+        for ds in _date_range(start, (end - start).days + 1):
+            try:
+                data = client.connectapi(f"/wellness-service/wellness/dailyMovement/{ds}")
+                # Response has a list of step entries; sum them
+                entries = data if isinstance(data, list) else []
+                for e in entries:
+                    total += int(e.get("steps") or e.get("totalSteps") or 0)
+            except Exception:
+                pass
+        if total > 0:
+            return total
+    except Exception:
+        pass
+
+    # Strategy 3: /usersummary-service/usersummary/daily/{date} — one at a time
+    try:
+        for ds in _date_range(start, (end - start).days + 1):
+            try:
+                data = client.connectapi(
+                    f"/usersummary-service/usersummary/daily/{ds}",
+                    params={"calendarDate": ds},
+                )
+                total += int(data.get("totalSteps") or data.get("steps") or 0)
+            except Exception:
+                pass
+        return total
+    except Exception:
+        pass
+
+    return 0
+
+
 # ── body composition / BMI ────────────────────────────────────────────────────
 
 def fetch_body_composition(
