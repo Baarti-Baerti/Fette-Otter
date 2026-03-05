@@ -432,8 +432,14 @@ def auth_status():
 @app.get("/api/members")
 def list_members():
     safe = ("id","name","role","emoji","color","bg","garminDevice",
-            "types","picture","google_email","joined_at")
+            "types","picture","google_email","joined_at","height_m")
     return jsonify([{k: m.get(k) for k in safe} for m in g.all_members()])
+
+
+@app.get("/api/debug/members-raw")
+def debug_members_raw():
+    """Show full raw member records including height_m."""
+    return jsonify(g.all_members())
 
 
 @app.post("/api/members/join")
