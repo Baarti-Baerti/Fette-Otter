@@ -330,7 +330,7 @@ def build_user_payload(
     types = seen_types or roster_entry.get("types", [])
 
     return {
-        **{k: roster_entry[k] for k in ("id", "name", "role", "emoji", "color", "bg", "garminDevice")},
+        **{k: roster_entry.get(k) for k in ("id", "name", "role", "emoji", "color", "bg", "garminDevice", "picture", "provider")},
         "types":        types,
         "calories":     week["calories"],
         "workouts":     len(range_acts),
