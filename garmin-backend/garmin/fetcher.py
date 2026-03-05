@@ -305,32 +305,60 @@ ACTIVITY_TYPE_MAP = {
 
 
 def fetch_activities(
-    client: garth.Client, start: date, end: date, limit: int = 200
+    client: garth.Client, start: date, end: date, limit: int = 100
 ) -> list[dict[str, Any]]:
     """
-    Fetch activity list for a date range.
-    NOTE: Garmin's API may ignore startDate/endDate, so we filter client-side.
+    Fetch all activities in a date range, paginating until exhausted.
+    NOTE: Garmin's API may ignore startDate/endDate, so we filter client-side
+    and stop paginating once we've gone past the start date.
     """
-    raw = client.connectapi(
-        "/activitylist-service/activities/search/activities",
-        params={
-            "startDate": _date_str(start),
-            "endDate":   _date_str(end),
-            "limit":     limit,
-            "start":     0,
-            "_":         "",
-        },
-    ) or []
-
-    # Filter client-side to ensure we only return activities in the date range
     start_str = start.isoformat()
     end_str   = end.isoformat()
-    filtered = []
-    for a in raw:
-        act_date = (a.get("startTimeLocal") or "")[:10]
-        if act_date and start_str <= act_date <= end_str:
-            filtered.append(a)
-    return filtered
+    collected = []
+    offset = 0
+
+    while True:
+        raw = client.connectapi(
+            "/activitylist-service/activities/search/activities",
+            params={
+                "startDate": _date_str(start),
+                "endDate":   _date_str(end),
+                "limit":     limit,
+                "start":     offset,
+            },
+        ) or []
+
+        if not raw:
+            break
+
+        found_any_in_range = False
+        all_before_range = True
+        for a in raw:
+            act_date = (a.get("startTimeLocal") or "")[:10]
+            if not act_date:
+                continue
+            if act_date > end_str:
+                continue  # future activity, skip
+            if act_date < start_str:
+                continue  # before our window — keep scanning but note it
+            all_before_range = False
+            found_any_in_range = True
+            collected.append(a)
+
+        # Stop if Garmin returned fewer results than the page size (no more pages)
+        if len(raw) < limit:
+            break
+        # Stop if every activity on this page is before our start date
+        oldest = min(
+            ((a.get("startTimeLocal") or "")[:10] for a in raw),
+            default=""
+        )
+        if oldest and oldest < start_str:
+            break
+
+        offset += limit
+
+    return collected
 
 
 def fetch_activities_for_month(
