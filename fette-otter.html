@@ -1044,11 +1044,6 @@
     </div>
     <div class="live-pill"><div class="live-dot"></div>Live Sync</div>
     <div id="clock">--:--:--</div>
-    <div class="week-selector" id="weekSelector">
-      <button class="week-btn" data-range="lastmonth" onclick="setWeek(this,'lastmonth')">Last Month</button>
-      <button class="week-btn active" data-range="thismonth" onclick="setWeek(this,'thismonth')">This Month</button>
-      <button class="week-btn" data-range="ytd" onclick="setWeek(this,'ytd')">Year to Date</button>
-    </div>
   </div>
 </header>
 
@@ -1080,6 +1075,13 @@
 
 <!-- ══ DETAILS PAGE ══ -->
 <div class="page" id="page-details">
+  <div style="padding:16px 24px 0;display:flex;align-items:center;gap:10px">
+    <div class="week-selector" id="weekSelector">
+      <button class="week-btn" data-range="lastmonth" onclick="setWeek(this,'lastmonth')">Last Month</button>
+      <button class="week-btn active" data-range="thismonth" onclick="setWeek(this,'thismonth')">This Month</button>
+      <button class="week-btn" data-range="ytd" onclick="setWeek(this,'ytd')">Year to Date</button>
+    </div>
+  </div>
   <div class="main-grid">
     <!-- Leaderboard -->
     <div class="panel">
@@ -1464,7 +1466,6 @@ function switchPage(p,btn){
   document.querySelectorAll('.nav-tab').forEach(x=>x.classList.remove('active'));
   document.getElementById('page-'+p).classList.add('active');
   btn.classList.add('active');
-  document.getElementById('weekSelector').style.display = p==='details' ? 'flex' : 'none';
   if(p==='monthly') renderMonthly();
   if(p==='details') { renderLB(); renderDetail(); }
 }
