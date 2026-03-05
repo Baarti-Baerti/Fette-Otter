@@ -26,6 +26,9 @@ from typing import Any
 
 log = logging.getLogger("squad_stats.cache")
 
+# Bump this whenever the payload schema changes — forces cache invalidation on deploy
+CACHE_VERSION = "2"
+
 # ── periods we cache ──────────────────────────────────────────────────────────
 CACHED_PERIODS = ["thismonth", "lastmonth", "ytd"]
 
@@ -54,9 +57,16 @@ def init_db() -> None:
                 period      TEXT NOT NULL,
                 fetched_at  TEXT NOT NULL,
                 payload     TEXT NOT NULL,
+                version     TEXT NOT NULL DEFAULT '1',
                 PRIMARY KEY (period)
             )
         """)
+        # Migrate existing DB: add version column if absent
+        try:
+            conn.execute("ALTER TABLE team_cache ADD COLUMN version TEXT NOT NULL DEFAULT '1'")
+            conn.commit()
+        except Exception:
+            pass  # Column already exists
         conn.execute("""
             CREATE TABLE IF NOT EXISTS refresh_log (
                 id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -75,15 +85,15 @@ def init_db() -> None:
 
 def get_cached(period: str) -> tuple[list[dict], str | None]:
     """
-    Return (payload_list, fetched_at_iso) from cache, or ([], None) if empty.
+    Return (payload_list, fetched_at_iso) from cache, or ([], None) if empty or stale version.
     """
     try:
         with _connect() as conn:
             row = conn.execute(
-                "SELECT payload, fetched_at FROM team_cache WHERE period = ?",
+                "SELECT payload, fetched_at, version FROM team_cache WHERE period = ?",
                 (period,)
             ).fetchone()
-        if row:
+        if row and row["version"] == CACHE_VERSION:
             return json.loads(row["payload"]), row["fetched_at"]
     except Exception as exc:
         log.warning("Cache read failed for %s: %s", period, exc)
@@ -96,12 +106,13 @@ def set_cached(period: str, payload: list[dict]) -> None:
     try:
         with _connect() as conn:
             conn.execute(
-                """INSERT INTO team_cache (period, fetched_at, payload)
-                   VALUES (?, ?, ?)
+                """INSERT INTO team_cache (period, fetched_at, payload, version)
+                   VALUES (?, ?, ?, ?)
                    ON CONFLICT(period) DO UPDATE SET
                      fetched_at = excluded.fetched_at,
-                     payload    = excluded.payload""",
-                (period, now, json.dumps(payload)),
+                     payload    = excluded.payload,
+                     version    = excluded.version""",
+                (period, now, json.dumps(payload), CACHE_VERSION),
             )
             conn.commit()
         log.info("Cache updated for period=%s (%d users)", period, len(payload))
