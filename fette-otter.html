@@ -1050,8 +1050,8 @@
 <!-- NAV TABS -->
 <div class="nav-tabs">
   <button class="nav-tab active" onclick="switchPage('points',this)">🏅 Points</button>
-  <button class="nav-tab" onclick="switchPage('monthly',this)">📈 Monthly Progress</button>
   <button class="nav-tab" onclick="switchPage('details',this)">📊 Details</button>
+  <button class="nav-tab" onclick="switchPage('monthly',this)">📈 Monthly Progress</button>
 </div>
 
 <!-- ══ POINTS PAGE ══ -->
@@ -1315,6 +1315,7 @@ function normaliseUser(raw, idx) {
     actKcal:      raw.actKcal      || raw.active_kcal || 0,
     steps:        raw.steps        || 0,
     bmi:          raw.bmi          || null,
+    height_m:     raw.height_m     || null,
     types:        raw.types        || raw.activity_types || [],
     week:         raw.week         || raw.week_active  || [],
     weekCalories: raw.weekCalories || raw.week_calories || [],
@@ -1635,6 +1636,7 @@ function renderDetail(){
             <div class="detail-item"><div class="detail-item-lbl">Distance</div><div class="detail-item-val">${u.km}<span style="font-size:.9rem">km</span></div></div>
             <div class="detail-item"><div class="detail-item-lbl">Act. Kcal</div><div class="detail-item-val">${(u.actKcal/1000).toFixed(1)}K</div></div>
             ${u.bmi && u.bmi > 0 ? `<div class="detail-item"><div class="detail-item-lbl">BMI</div><div class="detail-item-val" style="color:${u.bmi<18.5?'#f59e0b':u.bmi<25?'#059669':u.bmi<30?'#f59e0b':'#ef4444'}">${u.bmi.toFixed(1)}</div></div>` : ''}
+            ${u.height_m ? `<div class="detail-item"><div class="detail-item-lbl">Height</div><div class="detail-item-val">${Math.round(u.height_m * 100)}<span style="font-size:.9rem">cm</span></div></div>` : ''}
           </div>
         </div>
       </div>
