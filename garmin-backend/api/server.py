@@ -24,7 +24,7 @@ from garth.exc import GarthException, GarthHTTPError
 import garmin as g
 from garmin import strava as sv
 from api.cache import (
-    init_db, get_cached, set_cached, cache_age_seconds,
+    init_db, get_cached, set_cached, cache_age_seconds, clear_cache,
     refresh_all_periods, start_scheduler, last_refresh_log,
     CACHED_PERIODS,
 )
@@ -557,6 +557,7 @@ def set_member_height(member_id: int):
         return jsonify({"error": "height_cm must be between 100 and 250"}), 400
     height_m = round(float(height_cm) / 100.0, 3)
     g.update_member(member_id, {"height_m": height_m})
+    clear_cache()  # force fresh fetch so BMI/height appears immediately
     return jsonify({"ok": True, "member_id": member_id, "height_m": height_m})
 
 

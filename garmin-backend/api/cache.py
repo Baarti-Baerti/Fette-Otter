@@ -120,6 +120,17 @@ def set_cached(period: str, payload: list[dict]) -> None:
         log.error("Cache write failed for %s: %s", period, exc)
 
 
+def clear_cache() -> None:
+    """Delete all cached entries, forcing a fresh fetch on next request."""
+    try:
+        with _connect() as conn:
+            conn.execute("DELETE FROM team_cache")
+            conn.commit()
+        log.info("Cache cleared")
+    except Exception as exc:
+        log.error("Cache clear failed: %s", exc)
+
+
 def cache_age_seconds(fetched_at: str | None) -> float | None:
     """Return how many seconds ago the cache was written, or None."""
     if not fetched_at:
