@@ -48,7 +48,11 @@ def _normalise_activity(act: dict[str, Any]) -> dict[str, Any]:
         mapped = "Running"
     elif "walk" in atype_raw or "hik" in atype_raw:
         mapped = "Walking"
-    elif "cycl" in atype_raw or "bik" in atype_raw or "ride" in atype_raw:
+    elif "virtual" in atype_raw and ("cycl" in atype_raw or "bik" in atype_raw or "ride" in atype_raw):
+        mapped = "VirtualCycling"
+    elif "indoor_cycl" in atype_raw or "spinning" in atype_raw:
+        mapped = "VirtualCycling"
+    elif "cycl" in atype_raw or "bik" in atype_raw or "ride" in atype_raw or "e_bike" in atype_raw:
         mapped = "Cycling"
     elif "swim" in atype_raw:
         mapped = "Swimming"
