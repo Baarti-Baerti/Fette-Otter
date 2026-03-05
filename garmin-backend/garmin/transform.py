@@ -283,6 +283,7 @@ def build_user_payload(
     range_days: int = 7,   # kept for backward compat, ignored if range_start provided
     bmi: float | None = None,
     steps: int = 0,
+    height_m: float | None = None,
 ) -> dict[str, Any]:
     """
     Assemble the complete user data object the dashboard frontend needs.
@@ -344,6 +345,7 @@ def build_user_payload(
         "actKcal":      week["actKcal"],
         "steps":        steps,
         "bmi":          round(bmi, 1) if bmi else 0.0,
+        "height_m":     round(height_m, 3) if height_m else None,
         "week":         week["week"],
         "weekCalories": week["weekCalories"],
         "kmByType":     _km_by_type(range_acts),
