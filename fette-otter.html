@@ -2296,10 +2296,14 @@ async function submitHeight() {
       body: JSON.stringify({ admin_name: currentMember.name, height_cm: cm }),
     });
     if (!res.ok) throw new Error(await res.text());
+    // Clear server cache so height appears immediately
+    await fetch(`${API_BASE}/api/admin/clear-cache`, { method: 'GET' });
     closeHeightModal();
-    // Clear cache so next load re-fetches with BMI
     sessionStorage.removeItem('height_prompted');
-    showBanner('📏 Height saved — BMI will appear on next data refresh', 'live');
+    // Reload data so height shows up right away
+    Object.keys(dataCache).forEach(k => delete dataCache[k]);
+    await loadData(currentPeriod);
+    showBanner('📏 Height saved!', 'live');
   } catch(e) {
     msg.innerHTML = `<span style="color:#b91c1c">Error: ${e.message}</span>`;
     btn.disabled = false;
