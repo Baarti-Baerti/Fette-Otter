@@ -189,6 +189,35 @@ def build_week_summary(
 
 # ── monthly summary ───────────────────────────────────────────────────────────
 
+def _challenge_km(activities: list[dict[str, Any]]) -> float:
+    """
+    Compute equivalent running km for the monthly challenge, applying factors:
+      - Running:        1:1
+      - Cycling:        1:5  (5 km bike = 1 km running)
+      - VirtualCycling: 1:4  (4 km indoor bike = 1 km running)
+      - Swimming:       4:1  (1 km swim = 4 km running)
+      - Walking:        1:1  only if duration > 30 min AND avg speed > 6.5 km/h
+    """
+    total = 0.0
+    for a in activities:
+        km = a["distance_m"] / 1000
+        t  = a["type"] or ""
+        if t == "Running":
+            total += km
+        elif t == "Cycling":
+            total += km / 5.0
+        elif t == "VirtualCycling":
+            total += km / 4.0
+        elif t == "Swimming":
+            total += km * 4.0
+        elif t == "Walking":
+            dur_min = a["duration_s"] / 60.0
+            speed_kmh = (km / (a["duration_s"] / 3600.0)) if a["duration_s"] > 0 else 0
+            if dur_min > 30 and speed_kmh > 6.5:
+                total += km
+    return round(total, 2)
+
+
 def build_month_summary(
     activities: list[dict[str, Any]],
     bmi: float | None,
@@ -197,18 +226,20 @@ def build_month_summary(
 ) -> dict[str, Any]:
     """
     Build one month's entry for the `monthly` array.
-
-    Returns:
-        { cal, sess, km, actKcal, bmi, days }
-    where `days` is a 28-element list of daily active kcal (0 = rest day).
     """
     norms = [_normalise_activity(a) for a in activities]
 
-    cal    = sum(a["calories"]   for a in norms)
-    sess   = len(norms)
-    km     = _km(sum(a["distance_m"] for a in norms))
-    actKcal= sum(a["active_kcal"] for a in norms)
-    runKm  = _km(sum(a["distance_m"] for a in norms if a["type"] == "Running"))
+    cal        = sum(a["calories"]   for a in norms)
+    sess       = len(norms)
+    km         = _km(sum(a["distance_m"] for a in norms))
+    actKcal    = sum(a["active_kcal"] for a in norms)
+    split      = _split_km(norms)
+    runKm      = split["runKm"]
+    cycleKm    = split["cycleKm"]
+    virtualKm  = split["virtualKm"]
+    swimKm     = split["swimKm"]
+    walkKm     = split["walkKm"]
+    challengeKm = _challenge_km(norms)
 
     # Build 28-day array (we cap at 28 for display uniformity)
     _, last_day = calendar.monthrange(year, month)
@@ -222,15 +253,20 @@ def build_month_summary(
         days.append(sum(a["active_kcal"] for a in day_acts))
 
     return {
-        "year":     year,
-        "month":    month,
-        "cal":      cal,
-        "sess":     sess,
-        "km":       km,
-        "runKm":    runKm,
-        "actKcal":  actKcal,
-        "bmi":      round(bmi, 1) if bmi else None,
-        "days":     days,
+        "year":         year,
+        "month":        month,
+        "cal":          cal,
+        "sess":         sess,
+        "km":           km,
+        "runKm":        runKm,
+        "cycleKm":      cycleKm,
+        "virtualKm":    virtualKm,
+        "swimKm":       swimKm,
+        "walkKm":       walkKm,
+        "challengeKm":  challengeKm,
+        "actKcal":      actKcal,
+        "bmi":          round(bmi, 1) if bmi else None,
+        "days":         days,
     }
 
 
