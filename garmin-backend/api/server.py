@@ -128,7 +128,8 @@ def load_garmin_user_data(member: dict[str, Any], range_start: date, range_end: 
     try:
         week_acts      = g.fetch_activities(client, range_start, range_end)
         week_summaries = g.fetch_daily_summaries(client, range_start, range_days)
-        bmi            = g.fetch_latest_bmi(client)
+        height_override = member.get("height_m") or None  # manually set in roster
+        bmi            = g.fetch_latest_bmi(client, height_m_override=height_override)
         steps          = g.fetch_steps_range(client, range_start, range_end)
 
         # Fetch and cache profile picture if not already stored
@@ -150,7 +151,7 @@ def load_garmin_user_data(member: dict[str, Any], range_start: date, range_end: 
         def _fetch_month(yr, mo):
             key      = f"{yr}-{mo:02d}"
             acts     = g.fetch_activities_for_month(client, yr, mo)
-            mo_bmi   = g.fetch_bmi_for_month(client, yr, mo)
+            mo_bmi   = g.fetch_bmi_for_month(client, yr, mo, height_m_override=height_override)
             return key, acts, mo_bmi if mo_bmi is not None else bmi
 
         with ThreadPoolExecutor(max_workers=4) as pool:
@@ -530,6 +531,22 @@ def join_mfa():
     except Exception as exc:
         log.exception("Unexpected error in /api/members/join/mfa: %s", exc)
         return jsonify({"error": f"Server error: {str(exc)}"}), 500
+
+
+@app.post("/api/members/<int:member_id>/height")
+def set_member_height(member_id: int):
+    """Admin endpoint to manually set a member's height (cm) for BMI calculation."""
+    body       = request.get_json(silent=True) or {}
+    admin_name = (body.get("admin_name") or "").strip()
+    ADMIN_NAME = os.environ.get("ADMIN_NAME", "Martin")
+    if admin_name != ADMIN_NAME:
+        abort(403)
+    height_cm = body.get("height_cm")
+    if not height_cm or not (100 < float(height_cm) < 250):
+        return jsonify({"error": "height_cm must be between 100 and 250"}), 400
+    height_m = round(float(height_cm) / 100.0, 3)
+    g.update_member(member_id, {"height_m": height_m})
+    return jsonify({"ok": True, "member_id": member_id, "height_m": height_m})
 
 
 @app.delete("/api/members/<int:member_id>")
