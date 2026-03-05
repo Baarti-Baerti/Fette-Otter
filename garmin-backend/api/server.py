@@ -736,7 +736,39 @@ def debug_bmi(user_id: int):
         client = g.get_client(user_id)
         today  = date.today()
         start  = date(today.year, 1, 1)
-        height_m = g.fetch_user_height(client)
+        # Probe each height endpoint individually so we can see what's failing
+        height_probes = {}
+        height_m = None
+        for path, keys in [
+            ("/userprofile-service/userprofile",                          ["userInfo.height", "height"]),
+            ("/userprofile-service/userprofile/personal-information",     ["height", "heightInCentimeters"]),
+            ("/userprofile-service/userprofile/user-settings",            ["height", "heightInCentimeters"]),
+            ("/userprofile-service/personalInformation/user",             ["height", "heightInCentimeters"]),
+            ("/userprofile-service/userprofile/user-preferences",         ["height", "heightInCentimeters"]),
+        ]:
+            try:
+                data = client.connectapi(path)
+                # Try to extract the height value using the key paths
+                found = None
+                for key in keys:
+                    parts = key.split(".")
+                    val = data
+                    for p in parts:
+                        val = val.get(p) if isinstance(val, dict) else None
+                    if val and float(val) > 0:
+                        found = float(val)
+                        break
+                height_probes[path] = {
+                    "top_level_keys": list(data.keys()) if isinstance(data, dict) else type(data).__name__,
+                    "raw_height_value": found,
+                    "height_m": round(found / 100.0 if found and found > 3 else found, 3) if found else None,
+                }
+                if found and height_m is None:
+                    h = found / 100.0 if found > 3 else found
+                    if 1.2 < h < 2.5:
+                        height_m = round(h, 3)
+            except Exception as exc:
+                height_probes[path] = {"error": str(exc)}
 
         probes = {}
         for path, params in [
@@ -766,6 +798,7 @@ def debug_bmi(user_id: int):
             "user": member["name"],
             "height_m": height_m,
             "latest_bmi_computed": latest_bmi,
+            "height_probes": height_probes,
             "probes": probes,
         })
     except Exception as exc:
