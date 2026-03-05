@@ -1521,7 +1521,8 @@ function renderAll(){
 // ════ OVERVIEW ════
 function renderLB(){
   const COLS = [
-    { key:'km',        label:'Total',             fmt: u => fmtKm(u.km),                                     unit:'km' },
+    { key:'km',        label:'Total orig.',       fmt: u => fmtKm(u.km),                                     unit:'km' },
+    { key:'convKm',    label:'Total conv.',       fmt: u => ((u.runKm||0) + (u.cycleKm||0)/5 + (u.virtualKm||0)/4 + (u.swimKm||0)*4 + (u.skiKm||0)/5 + (u.walkKm||0)).toFixed(1), unit:'km' },
     { key:'workouts',  label:'Sessions',         fmt: u => u.workouts||0,                                   unit:'' },
     { key:'runKm',     label:'🏃 Run',            fmt: u => fmtKm(u.runKm),                                  unit:'km' },
     { key:'cycleKm',   label:'🚴 Bike',           fmt: u => fmtKm(u.cycleKm),                                unit:'km' },
@@ -1533,7 +1534,11 @@ function renderLB(){
   function fmtKm(v){ return (v||0) > 0 ? (v||0).toFixed(1) : '—'; }
 
   const isAdmin = currentMember?.name === 'Martin';
-  const sorted = [...users].sort((a,b) => (b[curMetric]||0) - (a[curMetric]||0));
+  function metricVal(u, key) {
+    if (key === 'convKm') return (u.runKm||0) + (u.cycleKm||0)/5 + (u.virtualKm||0)/4 + (u.swimKm||0)*4 + (u.skiKm||0)/5 + (u.walkKm||0);
+    return u[key]||0;
+  }
+  const sorted = [...users].sort((a,b) => metricVal(b, curMetric) - metricVal(a, curMetric));
 
   const thead = `<tr>
     <th style="text-align:left">Athlete</th>
@@ -1548,7 +1553,9 @@ function renderLB(){
     const rc = i===0?'top1':i===1?'top2':i===2?'top3':'';
     const ac = u.id===selUser?.id ? 'lb-active' : '';
     const cells = COLS.map(c => {
-      const raw = u[c.key]||0;
+      const raw = c.key === 'convKm'
+        ? (u.runKm||0) + (u.cycleKm||0)/5 + (u.virtualKm||0)/4 + (u.swimKm||0)*4 + (u.skiKm||0)/5 + (u.walkKm||0)
+        : u[c.key]||0;
       const isZero = raw === 0;
       const isSort = c.key === curMetric;
       const cls = isZero ? 'lb-zero' : isSort ? 'lb-sort-col' : '';
