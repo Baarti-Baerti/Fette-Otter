@@ -177,6 +177,7 @@ def load_garmin_user_data(member: dict[str, Any], range_start: date, range_end: 
             range_end=range_end,
             bmi=bmi,
             steps=steps,
+            height_m=height_override,
         )
     except Exception as exc:
         log.exception("Garmin fetch failed user %s: %s", uid, exc)
