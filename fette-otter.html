@@ -1522,7 +1522,7 @@ function renderAll(){
 // ════ OVERVIEW ════
 function renderLB(){
   const COLS = [
-    { key:'convKm',    label:'Points',            fmt: u => { const cy=new Date().getFullYear(); return (u.monthly||[]).filter(m=>m.year===cy).reduce((s,m)=>s+(m.challengeKm!=null?m.challengeKm:calcChallengeKm(m)),0).toFixed(1); }, unit:'km' },
+    { key:'convKm',    label:'Points',            fmt: u => ((u.runKm||0) + (u.cycleKm||0)/5 + (u.virtualKm||0)/4 + (u.swimKm||0)*4 + (u.walkKm||0)).toFixed(1), unit:'km' },
     { key:'km',        label:'Original',           fmt: u => fmtKm((u.runKm||0) + (u.cycleKm||0) + (u.virtualKm||0) + (u.swimKm||0) + (u.walkKm||0)), unit:'km' },
     { key:'workouts',  label:'Sessions',         fmt: u => u.workouts||0,                                   unit:'' },
     { key:'runKm',     label:'🏃 Run',            fmt: u => fmtKm(u.runKm),                                  unit:'km' },
@@ -1536,7 +1536,7 @@ function renderLB(){
 
   const isAdmin = currentMember?.name === 'Martin';
   function metricVal(u, key) {
-    if (key === 'convKm') { const cy=new Date().getFullYear(); return (u.monthly||[]).filter(m=>m.year===cy).reduce((s,m)=>s+(m.challengeKm!=null?m.challengeKm:calcChallengeKm(m)),0); }
+    if (key === 'convKm') return (u.runKm||0) + (u.cycleKm||0)/5 + (u.virtualKm||0)/4 + (u.swimKm||0)*4 + (u.walkKm||0);
     if (key === 'km')     return (u.runKm||0) + (u.cycleKm||0) + (u.virtualKm||0) + (u.swimKm||0) + (u.walkKm||0);
     return u[key]||0;
   }
@@ -1556,7 +1556,7 @@ function renderLB(){
     const ac = u.id===selUser?.id ? 'lb-active' : '';
     const cells = COLS.map(c => {
       const raw = c.key === 'convKm'
-        ? (() => { const cy=new Date().getFullYear(); return (u.monthly||[]).filter(m=>m.year===cy).reduce((s,m)=>s+(m.challengeKm!=null?m.challengeKm:calcChallengeKm(m)),0); })()
+        ? (u.runKm||0) + (u.cycleKm||0)/5 + (u.virtualKm||0)/4 + (u.swimKm||0)*4 + (u.walkKm||0)
         : c.key === 'km'
         ? (u.runKm||0) + (u.cycleKm||0) + (u.virtualKm||0) + (u.swimKm||0) + (u.walkKm||0)
         : u[c.key]||0;
