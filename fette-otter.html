@@ -1934,13 +1934,19 @@ function renderPoints(){
       const bmi = mData?.bmi && mData.bmi > 0 ? mData.bmi : null;
       const bmiLine = bmi ? `<div style="font-size:.76rem;color:var(--muted);font-weight:600;line-height:1.2;margin-top:2px">${bmi.toFixed(1)}</div>` : '';
 
-      // Build raw breakdown tooltip
+      // Build breakdown tooltip — derive qualified walk from challengeKm
       const rawParts = [];
-      if (mData?.runKm > 0)    rawParts.push(`🏃 ${mData.runKm.toFixed(1)}km`);
-      if (mData?.cycleKm > 0)  rawParts.push(`🚴 ${mData.cycleKm.toFixed(1)}km÷5`);
+      if (mData?.runKm > 0)     rawParts.push(`🏃 ${mData.runKm.toFixed(1)}km`);
+      if (mData?.cycleKm > 0)   rawParts.push(`🚴 ${mData.cycleKm.toFixed(1)}km÷5`);
       if (mData?.virtualKm > 0) rawParts.push(`💻 ${mData.virtualKm.toFixed(1)}km÷4`);
-      if (mData?.swimKm > 0)   rawParts.push(`🏊 ${mData.swimKm.toFixed(1)}km×4`);
-      if (mData?.walkKm > 0)   rawParts.push(`🚶 ${mData.walkKm.toFixed(1)}km (qual.)`);
+      if (mData?.swimKm > 0)    rawParts.push(`🏊 ${mData.swimKm.toFixed(1)}km×4`);
+      if (mData?.walkKm > 0)    rawParts.push(`🚶 ${mData.walkKm.toFixed(1)}km total`);
+      if (mData) {
+        const ckm = mData.challengeKm != null ? mData.challengeKm : calcChallengeKm(mData);
+        const qualW = Math.max(0, ckm - (mData.runKm||0) - (mData.cycleKm||0)/5 - (mData.virtualKm||0)/4 - (mData.swimKm||0)*4);
+        if (qualW > 0.01) rawParts.push(`✅ ${qualW.toFixed(1)}km walk qualified`);
+        else if (mData.walkKm > 0) rawParts.push(`❌ walk not qualified`);
+      }
       const breakdown = rawParts.length ? ' | ' + rawParts.join(', ') : '';
 
       if (isCurrent) {
