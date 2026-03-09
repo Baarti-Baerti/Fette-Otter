@@ -1576,14 +1576,14 @@ function renderLB(){
       let title = '';
       if (c.key === 'convKm') {
         const parts = [];
-        if (u.runKm    > 0) parts.push(`🏃 ${(u.runKm).toFixed(1)}km ÷1`);
-        if (u.cycleKm  > 0) parts.push(`🚴 ${(u.cycleKm).toFixed(1)}km ÷5 = ${(u.cycleKm/5).toFixed(1)}`);
-        if (u.virtualKm> 0) parts.push(`💻 ${(u.virtualKm).toFixed(1)}km ÷4 = ${(u.virtualKm/4).toFixed(1)}`);
-        if (u.swimKm   > 0) parts.push(`🏊 ${(u.swimKm).toFixed(1)}km ×4 = ${(u.swimKm*4).toFixed(1)}`);
+        if (u.runKm    > 0.05) parts.push(`🏃 ${(u.runKm).toFixed(1)}km ÷1`);
+        if (u.cycleKm  > 0.05) parts.push(`🚴 ${(u.cycleKm).toFixed(1)}km ÷5 = ${(u.cycleKm/5).toFixed(1)}`);
+        if (u.virtualKm> 0.05) parts.push(`💻 ${(u.virtualKm).toFixed(1)}km ÷4 = ${(u.virtualKm/4).toFixed(1)}`);
+        if (u.swimKm   > 0.05) parts.push(`🏊 ${(u.swimKm).toFixed(1)}km ×4 = ${(u.swimKm*4).toFixed(1)}`);
         const qualWalkLB = u.challengeKm != null
           ? Math.max(0, u.challengeKm - (u.runKm||0) - (u.cycleKm||0)/5 - (u.virtualKm||0)/4 - (u.swimKm||0)*4)
           : 0;
-        if (qualWalkLB > 0) parts.push(`🚶 ${qualWalkLB.toFixed(1)}km (qualified)`);
+        if (qualWalkLB > 0.05) parts.push(`🚶 ${qualWalkLB.toFixed(1)}km (qualified)`);
         title = parts.length ? `title="${parts.join(' | ')}"` : '';
       }
       return `<td ${title} class="${cls}" style="${isSort&&!isZero?'color:'+u.color:''}">${c.fmt(u)}</td>`;
@@ -1937,10 +1937,10 @@ function renderPoints(){
 
       // Build breakdown tooltip — only show activities that contributed to challengeKm
       const rawParts = [];
-      if (mData?.runKm > 0)     rawParts.push(`🏃 ${mData.runKm.toFixed(1)}km`);
-      if (mData?.cycleKm > 0)   rawParts.push(`🚴 ${mData.cycleKm.toFixed(1)}km÷5`);
-      if (mData?.virtualKm > 0) rawParts.push(`💻 ${mData.virtualKm.toFixed(1)}km÷4`);
-      if (mData?.swimKm > 0)    rawParts.push(`🏊 ${mData.swimKm.toFixed(1)}km×4`);
+      if ((mData?.runKm||0) > 0.05)     rawParts.push(`🏃 ${mData.runKm.toFixed(1)}km`);
+      if ((mData?.cycleKm||0) > 0.05)   rawParts.push(`🚴 ${mData.cycleKm.toFixed(1)}km÷5`);
+      if ((mData?.virtualKm||0) > 0.05) rawParts.push(`💻 ${mData.virtualKm.toFixed(1)}km÷4`);
+      if ((mData?.swimKm||0) > 0.05)    rawParts.push(`🏊 ${mData.swimKm.toFixed(1)}km×4`);
       if (mData) {
         const ckm = mData.challengeKm != null ? mData.challengeKm : calcChallengeKm(mData);
         const qualW = Math.max(0, ckm - (mData.runKm||0) - (mData.cycleKm||0)/5 - (mData.virtualKm||0)/4 - (mData.swimKm||0)*4);
@@ -2002,11 +2002,11 @@ function renderPoints(){
           return s + Math.max(0, ckm - (m.runKm||0) - (m.cycleKm||0)/5 - (m.virtualKm||0)/4 - (m.swimKm||0)*4);
         },0);
         const parts = [];
-        if (run      > 0) parts.push('🏃 '+run.toFixed(1)+'km ÷1');
-        if (bike     > 0) parts.push('🚴 '+bike.toFixed(1)+'km ÷5 = '+(bike/5).toFixed(1));
-        if (virt     > 0) parts.push('💻 '+virt.toFixed(1)+'km ÷4 = '+(virt/4).toFixed(1));
-        if (swim     > 0) parts.push('🏊 '+swim.toFixed(1)+'km ×4 = '+(swim*4).toFixed(1));
-        if (qualWalk > 0) parts.push('🚶 '+qualWalk.toFixed(1)+'km (qualified)');
+        if (run      > 0.05) parts.push('🏃 '+run.toFixed(1)+'km ÷1');
+        if (bike     > 0.05) parts.push('🚴 '+bike.toFixed(1)+'km ÷5 = '+(bike/5).toFixed(1));
+        if (virt     > 0.05) parts.push('💻 '+virt.toFixed(1)+'km ÷4 = '+(virt/4).toFixed(1));
+        if (swim     > 0.05) parts.push('🏊 '+swim.toFixed(1)+'km ×4 = '+(swim*4).toFixed(1));
+        if (qualWalk > 0.05) parts.push('🚶 '+qualWalk.toFixed(1)+'km (qualified)');
         return parts.join(' | ');
       })()}">${Object.values(monthlyRunMap(u)).reduce((a,b)=>a+b,0).toFixed(1)}</td>
       <td style="color:#818cf8;font-weight:900;border-left:2px solid var(--border)">${ruleA}</td>
