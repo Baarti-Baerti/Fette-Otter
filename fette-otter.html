@@ -1981,7 +1981,22 @@ function renderPoints(){
         </div>
       </td>
       ${monthCells}
-      <td style="border-left:2px solid var(--border);font-weight:800;color:var(--text2)">${Object.values(monthlyRunMap(u)).reduce((a,b)=>a+b,0).toFixed(1)}</td>
+      <td style="border-left:2px solid var(--border);font-weight:800;color:var(--text2)" title="${(()=>{
+        const cy = currentYear;
+        const months = (u.monthly||[]).filter(m=>m.year===cy);
+        const run   = months.reduce((s,m)=>s+(m.runKm||0),0);
+        const bike  = months.reduce((s,m)=>s+(m.cycleKm||0),0);
+        const virt  = months.reduce((s,m)=>s+(m.virtualKm||0),0);
+        const swim  = months.reduce((s,m)=>s+(m.swimKm||0),0);
+        const walk  = months.reduce((s,m)=>s+(m.walkKm||0),0);
+        const parts = [];
+        if (run  > 0) parts.push('🏃 '+run.toFixed(1)+'km ÷1');
+        if (bike > 0) parts.push('🚴 '+bike.toFixed(1)+'km ÷5 = '+(bike/5).toFixed(1));
+        if (virt > 0) parts.push('💻 '+virt.toFixed(1)+'km ÷4 = '+(virt/4).toFixed(1));
+        if (swim > 0) parts.push('🏊 '+swim.toFixed(1)+'km ×4 = '+(swim*4).toFixed(1));
+        if (walk > 0) parts.push('🚶 '+walk.toFixed(1)+'km (qual. only)');
+        return parts.join(' | ');
+      })()}">${Object.values(monthlyRunMap(u)).reduce((a,b)=>a+b,0).toFixed(1)}</td>
       <td style="color:#818cf8;font-weight:900;border-left:2px solid var(--border)">${ruleA}</td>
       <td style="color:${hasB?'#34d399':'var(--muted)'};font-weight:${hasB?900:600}">${hasB?'+2':'—'}</td>
       <td style="color:${hasC?'#f472b6':'var(--muted)'};font-weight:${hasC?900:600}">${hasC?'+2':'—'}</td>
