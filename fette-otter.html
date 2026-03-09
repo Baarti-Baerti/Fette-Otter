@@ -148,11 +148,27 @@
   /* Week selector */
   .week-selector {
     display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+  }
+  .week-group {
+    display: flex;
     gap: 3px;
     background: var(--surface2);
     border: 1.5px solid var(--border);
     border-radius: 24px;
     padding: 4px;
+  }
+  .week-group-label {
+    font-family: 'Nunito', sans-serif;
+    font-size: 0.65rem;
+    font-weight: 800;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    padding: 0 4px;
+    align-self: center;
   }
   .week-btn {
     font-family: 'Nunito', sans-serif;
@@ -1078,11 +1094,7 @@
 <!-- ══ DETAILS PAGE ══ -->
 <div class="page" id="page-details">
   <div style="padding:16px 24px 0;display:flex;align-items:center;gap:10px">
-    <div class="week-selector" id="weekSelector">
-      <button class="week-btn" data-range="lastmonth" onclick="setWeek(this,'lastmonth')">Last Month</button>
-      <button class="week-btn active" data-range="thismonth" onclick="setWeek(this,'thismonth')">This Month</button>
-      <button class="week-btn" data-range="ytd" onclick="setWeek(this,'ytd')">Year to Date</button>
-    </div>
+    <div class="week-selector" id="weekSelector"></div>
   </div>
   <div style="padding:0 24px 24px">
     <!-- Leaderboard full width -->
@@ -1496,7 +1508,16 @@ function applyMockData(period) {
 }
 
 function periodLabel(p) {
-  return {'thismonth':'This Month','lastmonth':'Last Month','ytd':'Year to Date'}[p] || p;
+  const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  if (p === 'thismonth') return 'Current Month';
+  if (p === 'lastmonth') return 'Last Month';
+  if (p === 'ytd')       return 'Year to Date';
+  if (p.startsWith('month-')) { const m = parseInt(p.split('-')[1]); return MONTH_NAMES[m-1] || p; }
+  if (p === 'q1') return 'Q1 (Jan–Mar)';
+  if (p === 'q2') return 'Q2 (Apr–Jun)';
+  if (p === 'q3') return 'Q3 (Jul–Sep)';
+  if (p === 'q4') return 'Q4 (Oct–Dec)';
+  return p;
 }
 
 // ── Page switch ───────────────────────────────────────────────────
@@ -1536,6 +1557,17 @@ function userPointsKm(u) {
     const lm = cm === 1 ? 12 : cm - 1;
     const ly = cm === 1 ? cy - 1 : cy;
     monthFilter = m => m.year === ly && m.month === lm;
+  } else if (currentPeriod.startsWith('month-')) {
+    const mo = parseInt(currentPeriod.split('-')[1]);
+    monthFilter = m => m.year === cy && m.month === mo;
+  } else if (currentPeriod === 'q1') {
+    monthFilter = m => m.year === cy && m.month >= 1 && m.month <= 3;
+  } else if (currentPeriod === 'q2') {
+    monthFilter = m => m.year === cy && m.month >= 4 && m.month <= 6;
+  } else if (currentPeriod === 'q3') {
+    monthFilter = m => m.year === cy && m.month >= 7 && m.month <= 9;
+  } else if (currentPeriod === 'q4') {
+    monthFilter = m => m.year === cy && m.month >= 10 && m.month <= 12;
   } else {
     // ytd or anything else — sum all months this year
     monthFilter = m => m.year === cy;
@@ -2073,9 +2105,59 @@ function renderPoints(){
     `<div class="lb-scroll"><table class="pts-table"><thead>${thead}</thead><tbody>${tbody}</tbody></table></div>` +
     legend.replace('margin-bottom:18px', 'margin-top:18px');
 }
-function setWeek(btn,p){
-  document.querySelectorAll('.week-btn').forEach(b=>b.classList.remove('active')); btn.classList.add('active');
-  loadData(p);
+function buildPeriodSelector() {
+  const today = new Date();
+  const cy = today.getFullYear();
+  const cm = today.getMonth() + 1; // 1-12
+  const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const quarters = [
+    { key: 'q1', label: 'Q1', months: [1,2,3] },
+    { key: 'q2', label: 'Q2', months: [4,5,6] },
+    { key: 'q3', label: 'Q3', months: [7,8,9] },
+    { key: 'q4', label: 'Q4', months: [10,11,12] },
+  ].filter(q => q.months[0] <= cm); // only show quarters that have started
+
+  // Build month buttons (Jan → current month)
+  const monthBtns = Array.from({length: cm}, (_, i) => {
+    const m = i + 1;
+    const key = `month-${m}`;
+    return `<button class="week-btn${currentPeriod===key?' active':''}" data-range="${key}" onclick="setWeek(this,'${key}')">${MONTH_NAMES[m-1]}</button>`;
+  }).join('');
+
+  // Build quarter buttons
+  const qBtns = quarters.map(q =>
+    `<button class="week-btn${currentPeriod===q.key?' active':''}" data-range="${q.key}" onclick="setWeek(this,'${q.key}')">${q.label}</button>`
+  ).join('');
+
+  // Build overview buttons
+  const overviewBtns = [
+    { key: 'thismonth', label: 'Current Month' },
+    { key: 'lastmonth', label: 'Last Month' },
+    { key: 'ytd',       label: 'Year to Date' },
+  ].map(o =>
+    `<button class="week-btn${currentPeriod===o.key?' active':''}" data-range="${o.key}" onclick="setWeek(this,'${o.key}')">${o.label}</button>`
+  ).join('');
+
+  document.getElementById('weekSelector').innerHTML =
+    `<span class="week-group-label">Month</span><div class="week-group">${monthBtns}</div>` +
+    (quarters.length ? `<span class="week-group-label">Quarter</span><div class="week-group">${qBtns}</div>` : '') +
+    `<div class="week-group">${overviewBtns}</div>`;
+}
+
+function setWeek(btn, p) {
+  currentPeriod = p;
+  document.querySelectorAll('.week-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  // Synthetic periods (month-N, qN) are computed from ytd data — no backend fetch needed
+  if (p.startsWith('month-') || p.startsWith('q')) {
+    if (dataCache['ytd']) {
+      applyData(dataCache['ytd'], p, true);
+    } else {
+      loadData('ytd').then(() => applyData(dataCache['ytd'], p, true));
+    }
+  } else {
+    loadData(p);
+  }
 }
 
 // ════ MONTHLY PROGRESS — SVG line charts, one per metric ════
@@ -2279,6 +2361,7 @@ function pickMpUser(id) {
 
 // ── INIT ───
 restoreSession();   // must run before loadData so admin check works in renderLB
+buildPeriodSelector();
 loadData('thismonth');
 
 // Auto-refresh every 15 minutes — clear cache first so fresh data is fetched
