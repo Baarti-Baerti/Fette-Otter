@@ -1344,7 +1344,7 @@ function normaliseUser(raw, idx) {
 
 // ── Shared state ──────────────────────────────────────────────────
 let users = [];
-let selUser = null, curMetric = 'km', selMonth = 0, selMoUser = null;
+let selUser = null, curMetric = 'convKm', selMonth = 0, selMoUser = null;
 let usingLiveData = false;
 
 const DAYS = ['M','T','W','T','F','S','S'];
@@ -1604,7 +1604,7 @@ function renderLB(){
 
   const thead = `<tr>
     <th style="text-align:left">Athlete</th>
-    ${COLS.map(c => `<th class="${c.key===curMetric?'sort-active':''}" onclick="setMetricKey('${c.key}')">
+    ${COLS.map(c => `<th class="${c.key===curMetric?'sort-active':''}" onclick="setMetricKey('${c.key}')" style="${c.key==='convKm'?'background:rgba(129,140,248,0.10);color:var(--violet)':''}">
       ${c.label}${c.unit?' <span style="font-weight:600;opacity:.6">'+c.unit+'</span>':''}
       ${c.key===curMetric?'<span style="color:var(--violet)">▾</span>':''}
     </th>`).join('')}
@@ -1636,7 +1636,7 @@ function renderLB(){
         if (qualWalkLB > 0.05) parts.push(`🚶 ${(qualWalkLB*3).toFixed(1)}km ÷3 = ${qualWalkLB.toFixed(1)}`);
         title = parts.length ? `title="${parts.join(' | ')}"` : '';
       }
-      return `<td ${title} class="${cls}" style="${isSort&&!isZero?'color:'+u.color:''}">${c.fmt(u)}</td>`;
+      return `<td ${title} class="${cls}" style="${c.key==='convKm' ? `background:rgba(129,140,248,0.07);font-weight:800;color:${isZero?'var(--muted)':'var(--violet)'}` : isSort&&!isZero?'color:'+u.color:''}">${c.fmt(u)}</td>`;
     }).join('');
     const providerBadge = u.provider === 'strava'
       ? `<span style="font-size:.84rem;background:#fff3e0;color:#c2410c;border-radius:6px;padding:1px 5px;font-weight:800;margin-left:4px">STR</span>`
