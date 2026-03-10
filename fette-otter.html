@@ -710,14 +710,159 @@
     display: block;
   }
 
+  /* ══ RESPONSIVE — tablet ══ */
   @media (max-width:1100px){
-    .hero,.monthly-hero{grid-template-columns:repeat(2,1fr);}
-    .main-grid,.two-col,.bottom-row{grid-template-columns:1fr;}
-    .user-month-cards{grid-template-columns:repeat(2,1fr);}
-    .page{margin:0 16px 16px;}
-    .monthly-page,.main-grid,.bottom-row{padding:16px;}
-    header{padding:14px 20px;}
-    .nav-tabs{padding:12px 20px 0;}
+    .hero,.monthly-hero { grid-template-columns: repeat(2,1fr); }
+    .main-grid,.two-col,.bottom-row { grid-template-columns: 1fr; }
+    .user-month-cards { grid-template-columns: repeat(2,1fr); }
+    .page { margin: 0 16px 16px; }
+    .monthly-page,.main-grid,.bottom-row { padding: 16px; }
+    header { padding: 14px 20px; }
+    .nav-tabs { padding: 12px 20px 0; }
+    .mp-charts { grid-template-columns: 1fr 1fr; }
+  }
+
+  /* ══ RESPONSIVE — mobile ══ */
+  @media (max-width:640px){
+    html { font-size: 15px; }
+
+    /* Header */
+    header {
+      padding: 10px 14px;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .logo-text { font-size: 1.25rem; }
+    .logo-sub  { font-size: 0.72rem; }
+    .logo-bubble { width: 36px; height: 36px; font-size: 1.2rem; }
+    .header-right { gap: 8px; }
+    #clock { display: none; }
+    .live-pill { font-size: 0.72rem; padding: 4px 8px; }
+
+    /* Nav tabs — scrollable row */
+    .nav-tabs {
+      padding: 8px 10px 0;
+      gap: 4px;
+      overflow-x: auto;
+      flex-wrap: nowrap;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+    }
+    .nav-tabs::-webkit-scrollbar { display: none; }
+    .nav-tab {
+      font-size: 0.84rem;
+      padding: 8px 14px;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
+    /* Page wrapper */
+    .page { margin: 0 8px 12px; border-radius: 0 12px 12px 12px; }
+    .page.active { border-radius: 0 12px 12px 12px; }
+
+    /* Hero stats — 2 col on mobile */
+    .hero {
+      grid-template-columns: 1fr 1fr;
+    }
+    .hero .stat-card { padding: 16px 14px; border-right: none; border-bottom: 1.5px solid var(--border); }
+    .hero .stat-card:nth-child(odd)  { border-right: 1.5px solid var(--border); }
+    .hero .stat-card:nth-child(3),
+    .hero .stat-card:nth-child(4)    { border-bottom: none; }
+    .stat-value { font-size: 2rem; }
+    .stat-card-icon { width: 32px; height: 32px; font-size: 1.1rem; margin-bottom: 10px; }
+
+    /* Period selector — scrollable */
+    .week-selector {
+      overflow-x: auto;
+      flex-wrap: nowrap;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+      padding-bottom: 4px;
+      gap: 4px;
+    }
+    .week-selector::-webkit-scrollbar { display: none; }
+    .week-group-label { display: none; }
+    .week-btn { font-size: 0.72rem; padding: 4px 10px; }
+
+    /* Details page */
+    #page-details > div:first-child { padding: 10px 12px 0; }
+    #page-details > div:last-child  { padding: 0 8px 12px; }
+
+    /* Leaderboard table — horizontal scroll */
+    .lb-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .lb-table th { font-size: 0.68rem; padding: 0 6px 8px; }
+    .lb-table td { font-size: 0.84rem; padding: 7px 6px; }
+    .lb-table th:first-child { min-width: 120px; }
+    .lb-name { font-size: 0.88rem; }
+    .lb-avatar-sm { width: 24px; height: 24px; font-size: 0.88rem; border-radius: 7px; }
+    .lb-rank { width: 18px; height: 18px; font-size: 0.78rem; }
+
+    /* Detail callout */
+    .main-grid { padding: 10px; gap: 12px; }
+    .detail-grid { grid-template-columns: 1fr 1fr; }
+    .detail-item-val { font-size: 1.25rem; }
+    .detail-name { font-size: 1.25rem; }
+
+    /* Points table — horizontal scroll */
+    .panel { border-radius: 14px; }
+    #page-points .panel { margin: 10px 8px; }
+    .points-panel { margin: 24px; }
+    #pointsContent { padding: 0 10px 14px !important; overflow-x: auto; }
+    .pts-table th { font-size: 0.62rem; padding: 0 7px 8px; }
+    .pts-table td { font-size: 0.72rem; padding: 7px 7px; }
+
+    /* Bottom row */
+    .bottom-row { padding: 0 8px 12px; gap: 12px; }
+    .compare-chart { padding: 14px; }
+
+    /* Monthly page */
+    .monthly-page { padding: 12px 10px; }
+    .monthly-hero { grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+    .mhero-card { padding: 14px; }
+    .mhero-icon { width: 34px; height: 34px; font-size: 1.1rem; margin-bottom: 10px; }
+    .two-col { grid-template-columns: 1fr; gap: 10px; }
+    .mp-charts { grid-template-columns: 1fr; }
+    .user-month-cards { grid-template-columns: 1fr 1fr; gap: 10px; padding: 12px 10px; }
+
+    /* Podium */
+    .podium-wrap { gap: 8px; }
+    .podium-avatar { width: 42px; height: 42px; font-size: 1.3rem; }
+    .podium-avatar.p1 { width: 52px; height: 52px; font-size: 1.6rem; }
+    .podium-block { width: 58px; }
+    .podium-block.p1 { width: 68px; }
+    .podium-name { font-size: 0.68rem; }
+
+    /* Join FAB — smaller on mobile */
+    .join-fab {
+      bottom: 16px; right: 16px;
+      padding: 11px 18px;
+      font-size: 0.88rem;
+    }
+
+    /* Modal */
+    .modal-box { max-width: calc(100vw - 24px); border-radius: 20px; }
+    .modal-header { padding: 22px 20px 18px; }
+    .modal-body { padding: 18px 20px 22px; }
+    .modal-header h2 { font-size: 1.25rem; }
+
+    /* Rings — smaller */
+    .rings-container { padding: 14px; gap: 10px; }
+    .ring-name { font-size: 0.75rem; }
+
+    /* Section label */
+    .section-label { padding: 0 14px 8px; font-size: 0.88rem; }
+
+    /* Panel header */
+    .panel-header { padding: 12px 14px; }
+    .panel-title { font-size: 1.1rem; }
+  }
+
+  /* ══ Extra small — very narrow phones ══ */
+  @media (max-width:380px){
+    html { font-size: 13px; }
+    .hero { grid-template-columns: 1fr 1fr; }
+    .monthly-hero { grid-template-columns: 1fr 1fr; }
+    .user-month-cards { grid-template-columns: 1fr; }
   }
 
   /* ── JOIN FAB ── */
@@ -958,6 +1103,21 @@
   .nmp-name  { font-family:'Nunito',sans-serif; font-weight:800; font-size:0.95rem; }
   .nmp-role  { font-size:0.7rem; color:var(--muted); font-weight:600; margin-top:1px; }
 
+  .details-selector-bar {
+    padding: 16px 24px 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .details-content {
+    padding: 0 24px 24px;
+  }
+
+  @media (max-width: 640px) {
+    .details-selector-bar { padding: 10px 10px 0; }
+    .details-content { padding: 0 8px 12px; }
+  }
+
   /* Loading spinner */
   .spinner {
     width: 18px; height: 18px;
@@ -1074,7 +1234,7 @@
 
 <!-- ══ POINTS PAGE ══ -->
 <div class="page active" id="page-points">
-  <div class="panel" style="margin:24px" id="pointsPanel">
+  <div class="panel points-panel" id="pointsPanel">
     <div class="panel-header">
       <span class="panel-title">🏅 Points</span>
       <span class="panel-badge" id="pointsBadge">YTD</span>
@@ -1093,10 +1253,10 @@
 
 <!-- ══ DETAILS PAGE ══ -->
 <div class="page" id="page-details">
-  <div style="padding:16px 24px 0;display:flex;align-items:center;gap:10px">
+  <div class="details-selector-bar">
     <div class="week-selector" id="weekSelector"></div>
   </div>
-  <div style="padding:0 24px 24px">
+  <div class="details-content">
     <!-- Leaderboard full width -->
     <div class="panel" style="margin-bottom:20px">
       <div class="panel-header">
@@ -1355,7 +1515,7 @@ function showBanner(msg, type='info') {
   if (!el) {
     el = document.createElement('div');
     el.id = 'data-banner';
-    el.style.cssText = 'font-family:Nunito,sans-serif;font-size:1.02rem;font-weight:700;padding:8px 36px;text-align:center;position:sticky;top:0;z-index:200;';
+    el.style.cssText = 'font-family:Nunito,sans-serif;font-size:0.93rem;font-weight:700;padding:8px 16px;text-align:center;position:sticky;top:0;z-index:200;';
     document.querySelector('.everything').prepend(el);
   }
   const styles = {
