@@ -24,7 +24,7 @@ from garth.exc import GarthException, GarthHTTPError
 import garmin as g
 from garmin import strava as sv
 from api.cache import (
-    init_db, get_cached, set_cached, cache_age_seconds, clear_cache,
+    init_db, get_cached, set_cached, cache_age_seconds,
     refresh_all_periods, start_scheduler, last_refresh_log,
     CACHED_PERIODS,
 )
@@ -432,24 +432,8 @@ def auth_status():
 @app.get("/api/members")
 def list_members():
     safe = ("id","name","role","emoji","color","bg","garminDevice",
-            "types","picture","google_email","joined_at","height_m")
+            "types","picture","google_email","joined_at")
     return jsonify([{k: m.get(k) for k in safe} for m in g.all_members()])
-
-
-@app.post("/api/admin/clear-cache")
-def clear_cache_endpoint():
-    """Clear all cached team data, forcing fresh fetch on next request."""
-    clear_cache()
-    return jsonify({"ok": True, "message": "Cache cleared"})
-
-
-@app.get("/api/admin/clear-cache")
-def clear_cache_get():
-    """GET version so it can be triggered from browser address bar."""
-    clear_cache()
-    return jsonify({"ok": True, "message": "Cache cleared — reload the dashboard"})
-    """Show full raw member records including height_m."""
-    return jsonify(g.all_members())
 
 
 @app.post("/api/members/join")
@@ -573,7 +557,6 @@ def set_member_height(member_id: int):
         return jsonify({"error": "height_cm must be between 100 and 250"}), 400
     height_m = round(float(height_cm) / 100.0, 3)
     g.update_member(member_id, {"height_m": height_m})
-    clear_cache()  # force fresh fetch so BMI/height appears immediately
     return jsonify({"ok": True, "member_id": member_id, "height_m": height_m})
 
 
@@ -753,40 +736,7 @@ def debug_bmi(user_id: int):
         client = g.get_client(user_id)
         today  = date.today()
         start  = date(today.year, 1, 1)
-        # Probe each height endpoint individually so we can see what's failing
-        height_probes = {}
-        height_m = None
-        for path, keys in [
-            ("/userprofile-service/userprofile",                          ["userInfo.height", "height"]),
-            ("/userprofile-service/userprofile/personal-information",     ["height", "heightInCentimeters"]),
-            ("/userprofile-service/userprofile/user-settings",            ["height", "heightInCentimeters"]),
-            ("/userprofile-service/personalInformation/user",             ["height", "heightInCentimeters"]),
-            ("/userprofile-service/userprofile/user-preferences",         ["height", "heightInCentimeters"]),
-        ]:
-            try:
-                data = client.connectapi(path)
-                # Try to extract the height value using the key paths
-                found = None
-                for key in keys:
-                    parts = key.split(".")
-                    val = data
-                    for p in parts:
-                        val = val.get(p) if isinstance(val, dict) else None
-                    if val and float(val) > 0:
-                        found = float(val)
-                        break
-                height_probes[path] = {
-                    "top_level_keys": list(data.keys()) if isinstance(data, dict) else type(data).__name__,
-                    "raw_height_value": found,
-                    "height_m": round(found / 100.0 if found and found > 3 else found, 3) if found else None,
-                    "full_response": data,  # dump everything so we can find the height field
-                }
-                if found and height_m is None:
-                    h = found / 100.0 if found > 3 else found
-                    if 1.2 < h < 2.5:
-                        height_m = round(h, 3)
-            except Exception as exc:
-                height_probes[path] = {"error": str(exc)}
+        height_m = g.fetch_user_height(client)
 
         probes = {}
         for path, params in [
@@ -816,7 +766,6 @@ def debug_bmi(user_id: int):
             "user": member["name"],
             "height_m": height_m,
             "latest_bmi_computed": latest_bmi,
-            "height_probes": height_probes,
             "probes": probes,
         })
     except Exception as exc:
@@ -940,19 +889,23 @@ def load_team(period: str) -> list[dict]:
     return results
 
 
+CACHE_MAX_AGE_SECONDS = 15 * 60  # 15 minutes
+
 @app.get("/api/team")
 def get_team():
     period = request.args.get("range", "thismonth")
 
-    # Serve from cache if available
+    # Serve from cache if available and fresh
     cached, fetched_at = get_cached(period)
     if cached:
         age = cache_age_seconds(fetched_at)
-        resp = jsonify(cached)
-        resp.headers["X-Cache"] = "HIT"
-        resp.headers["X-Cache-Age"] = str(int(age)) if age is not None else "?"
-        resp.headers["X-Cache-Fetched"] = fetched_at or ""
-        return resp
+        if age is not None and age < CACHE_MAX_AGE_SECONDS:
+            resp = jsonify(cached)
+            resp.headers["X-Cache"] = "HIT"
+            resp.headers["X-Cache-Age"] = str(int(age))
+            resp.headers["X-Cache-Fetched"] = fetched_at or ""
+            return resp
+        log.info("Cache stale for period=%s (age=%ds) — fetching live", period, int(age or 0))
 
     # Cache miss — fetch live and populate cache
     log.info("Cache miss for period=%s — fetching live", period)
