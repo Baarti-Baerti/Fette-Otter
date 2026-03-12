@@ -189,6 +189,11 @@ def fetch_activities(user_id: int, after: date, before: date | None = None) -> l
     return activities
 
 
+def fetch_activity_detail(activity_id: int, access_token: str) -> dict[str, Any]:
+    """Fetch a single activity by ID — includes calories field."""
+    return _get(f"/activities/{activity_id}", access_token)
+
+
 # ── Normalise to the same shape as garmin._normalise_activity ────────────────
 
 def normalise_activity(act: dict[str, Any]) -> dict[str, Any]:
@@ -202,12 +207,39 @@ def normalise_activity(act: dict[str, Any]) -> dict[str, Any]:
         "type":        mapped,
         "date":        start,
         "calories":    int(act.get("calories") or 0),
-        "active_kcal": int(act.get("calories") or 0),   # Strava only has total calories
+        "active_kcal": int(act.get("calories") or 0),
         "distance_m":  float(act.get("distance") or 0),
         "duration_s":  float(act.get("moving_time") or 0),
     }
 
 
 def fetch_and_normalise(user_id: int, after: date, before: date | None = None) -> list[dict[str, Any]]:
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
     raw = fetch_activities(user_id, after, before)
-    return [normalise_activity(a) for a in raw]
+    if not raw:
+        return []
+
+    # Fetch detailed calories for each activity in parallel
+    access_token = get_access_token(user_id)
+
+    def _enrich(act: dict[str, Any]) -> dict[str, Any]:
+        try:
+            detail = fetch_activity_detail(act["id"], access_token)
+            act = {**act, "calories": int(detail.get("calories") or 0)}
+        except Exception:
+            pass  # fall back to 0 if detail fetch fails
+        return normalise_activity(act)
+
+    results: dict[int, dict] = {}
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        futures = {pool.submit(_enrich, a): a["id"] for a in raw}
+        for fut in as_completed(futures):
+            act_id = futures[fut]
+            try:
+                results[act_id] = fut.result()
+            except Exception:
+                pass
+
+    # Preserve original order
+    return [results[a["id"]] for a in raw if a["id"] in results]
