@@ -1787,11 +1787,10 @@ function renderLB(){
     else if (currentPeriod==='q3') months=(u.monthly||[]).filter(m=>m.year===cy&&m.month>=7&&m.month<=9);
     else if (currentPeriod==='q4') months=(u.monthly||[]).filter(m=>m.year===cy&&m.month>=10&&m.month<=12);
     else months=(u.monthly||[]).filter(m=>m.year===cy);
-    // Find the first month where goal was reached
-    for (const m of months) {
-      if (m.goalDay != null) return m.goalDay;
-    }
-    return null;
+    // Average goalDay across all months where the goal was reached
+    const reached = months.filter(m => m.goalDay != null).map(m => m.goalDay);
+    if (reached.length === 0) return null;
+    return Math.round(reached.reduce((s, d) => s + d, 0) / reached.length);
   }
 
   const COLS = [
