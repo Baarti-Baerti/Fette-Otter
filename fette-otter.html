@@ -531,6 +531,7 @@
     letter-spacing: .06em; padding: 0 8px 10px;
     text-align: right; white-space: nowrap;
     cursor: pointer; user-select: none;
+    vertical-align: bottom;
   }
   .lb-table th:first-child { text-align: left; padding-left: 0; min-width: 160px; }
   .lb-table th.sort-active { color: var(--violet); }
@@ -1818,12 +1819,20 @@ function renderLB(){
   }
   const sorted = [...users].sort((a,b) => metricVal(b, curMetric) - metricVal(a, curMetric));
 
+  const isMultiMonth = !['thismonth','lastmonth'].includes(currentPeriod) && !currentPeriod.startsWith('month-');
+
   const thead = `<tr>
     <th style="text-align:left">Athlete</th>
-    ${COLS.map(c => `<th class="${c.key===curMetric?'sort-active':''}" onclick="setMetricKey('${c.key}')" style="${c.key==='convKm'?'background:rgba(129,140,248,0.10);color:var(--violet)':''}">
-      ${c.label}${c.unit?' <span style="font-weight:600;opacity:.6">'+c.unit+'</span>':''}
-      ${c.key===curMetric?'<span style="color:var(--violet)">▾</span>':''}
-    </th>`).join('')}
+    ${COLS.map(c => {
+      const label = c.key === 'goalDay' && isMultiMonth
+        ? `🎯 Avg Days<br>to Goal`
+        : c.label.replace(' ', '<br>');
+      const unit = c.unit ? ` <span style="font-weight:600;opacity:.6">${c.unit}</span>` : '';
+      const sort = c.key === curMetric ? `<span style="color:var(--violet)">▾</span>` : '';
+      return `<th class="${c.key===curMetric?'sort-active':''}" onclick="setMetricKey('${c.key}')" style="white-space:normal;line-height:1.25;${c.key==='convKm'?'background:rgba(129,140,248,0.10);color:var(--violet)':''}">
+        ${label}${unit} ${sort}
+      </th>`;
+    }).join('')}
     ${isAdmin ? '<th style="width:36px"></th>' : ''}
   </tr>`;
 
