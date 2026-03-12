@@ -661,10 +661,20 @@ def debug_strava(user_id: int):
         start = today - timedelta(days=30)
         acts = sv.fetch_activities(user_id, start, today)
         results["steps"]["fetch_activities_30d"] = f"OK — {len(acts)} activities"
-        results["sample_activity"] = acts[0] if acts else None
+        results["sample_activity_summary"] = acts[0] if acts else None
         results["activity_types"] = list({
             (a.get("sport_type") or a.get("type", "?")) for a in acts
         })
+        # Step 5: fetch detail for first activity to check calories field
+        if acts:
+            try:
+                access_token = sv.get_access_token(user_id)
+                detail = sv.fetch_activity_detail(acts[0]["id"], access_token)
+                results["steps"]["fetch_activity_detail"] = "OK"
+                results["sample_activity_detail_calories"] = detail.get("calories")
+                results["sample_activity_detail_keys"] = list(detail.keys())
+            except Exception as exc:
+                results["steps"]["fetch_activity_detail"] = f"FAILED: {exc}"
     except Exception as exc:
         results["steps"]["fetch_activities_30d"] = f"FAILED: {exc}"
 
