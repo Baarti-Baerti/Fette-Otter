@@ -529,7 +529,7 @@
     font-size: 0.84rem; font-weight: 800;
     color: var(--muted); text-transform: uppercase;
     letter-spacing: .06em; padding: 0 8px 10px;
-    text-align: right; white-space: nowrap;
+    text-align: center; white-space: nowrap;
     cursor: pointer; user-select: none;
     vertical-align: bottom;
   }
@@ -538,7 +538,7 @@
   .lb-table td {
     padding: 8px 8px; font-family: 'Nunito', sans-serif;
     font-size: 1.02rem; font-weight: 800;
-    text-align: right; white-space: nowrap;
+    text-align: center; white-space: nowrap;
     border-top: 1px solid var(--border);
   }
   .lb-table td:first-child { text-align: left; padding-left: 0; }
@@ -1829,7 +1829,7 @@ function renderLB(){
         : c.label.replace(' ', '<br>');
       const unit = c.unit ? ` <span style="font-weight:600;opacity:.6">${c.unit}</span>` : '';
       const sort = c.key === curMetric ? `<span style="color:var(--violet)">▾</span>` : '';
-      return `<th class="${c.key===curMetric?'sort-active':''}" onclick="setMetricKey('${c.key}')" style="white-space:normal;line-height:1.25;${c.key==='convKm'?'background:rgba(129,140,248,0.10);color:var(--violet)':''}">
+      return `<th class="${c.key===curMetric?'sort-active':''}" onclick="setMetricKey('${c.key}')" style="text-align:center;white-space:normal;line-height:1.25;${c.key==='convKm'?'background:rgba(129,140,248,0.10);color:var(--violet)':''}">
         ${label}${unit} ${sort}
       </th>`;
     }).join('')}
@@ -1865,7 +1865,7 @@ function renderLB(){
         if (qualWalkLB > 0.05) parts.push(`🚶 ${(qualWalkLB*3).toFixed(1)}km ÷3 = ${qualWalkLB.toFixed(1)}`);
         title = parts.length ? `title="${parts.join(' | ')}"` : '';
       }
-      return `<td ${title} class="${cls}" style="${c.key==='convKm' ? `background:rgba(129,140,248,0.07);font-weight:800;color:${isZero?'var(--muted)':'var(--violet)'}` : c.key==='goalDay'&&!isZero ? 'color:var(--text)' : isSort&&!isZero?'color:'+u.color:''}">${c.fmt(u)}</td>`;
+      return `<td ${title} class="${cls}" style="text-align:center;${c.key==='convKm' ? `background:rgba(129,140,248,0.07);font-weight:800;color:${isZero?'var(--muted)':'var(--violet)'}` : c.key==='goalDay'&&!isZero ? 'color:var(--text)' : isSort&&!isZero?'color:'+u.color:''}">${c.fmt(u)}</td>`;
     }).join('');
     const providerBadge = u.provider === 'strava'
       ? `<span style="font-size:.84rem;background:#fff3e0;color:#c2410c;border-radius:6px;padding:1px 5px;font-weight:800;margin-left:4px">STR</span>`
