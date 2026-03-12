@@ -187,14 +187,32 @@ def load_garmin_user_data(member: dict[str, Any], range_start: date, range_end: 
 
 def _build_month_from_normalised(acts: list[dict], year: int, month: int) -> dict:
     """Like build_month_summary but for already-normalised activity dicts (Strava)."""
+    from garmin.transform import _km, _split_km, _challenge_km, build_month_summary
+    # Reuse build_month_summary by passing already-normalised acts as raw
+    # (build_month_summary calls _normalise_activity internally, but since acts
+    # are already normalised we wrap them to pass through unchanged)
+    # Simplest: just replicate the logic directly using the shared helpers
     import calendar as cal_mod
-    from garmin.transform import _km, _split_km
-    cal    = sum(a["calories"]   for a in acts)
-    sess   = len(acts)
-    km     = _km(sum(a["distance_m"] for a in acts))
-    actKcal= sum(a["active_kcal"] for a in acts)
-    runKm  = _km(sum(a["distance_m"] for a in acts if a.get("type") == "Running"))
+    cal     = sum(a["calories"]    for a in acts)
+    sess    = len(acts)
+    km      = _km(sum(a["distance_m"] for a in acts))
+    actKcal = sum(a["active_kcal"] for a in acts)
+    durSec  = round(sum(a["duration_s"] for a in acts))
+    split   = _split_km(acts)
+    challengeKm = _challenge_km(acts)
+
+    # Day when cumulative challengeKm first crossed the goal
+    GOAL = 66.67
     _, last_day = cal_mod.monthrange(year, month)
+    goal_day: int | None = None
+    cumulative = 0.0
+    for day_num in range(1, last_day + 1):
+        d = date(year, month, day_num).isoformat()
+        day_acts = [a for a in acts if a["date"] == d]
+        cumulative += _challenge_km(day_acts)
+        if goal_day is None and cumulative >= GOAL:
+            goal_day = day_num
+
     days: list[int] = []
     for day_num in range(1, 29):
         if day_num > last_day:
@@ -203,10 +221,24 @@ def _build_month_from_normalised(acts: list[dict], year: int, month: int) -> dic
         d = date(year, month, day_num).isoformat()
         day_acts = [a for a in acts if a["date"] == d]
         days.append(sum(a["active_kcal"] for a in day_acts))
+
     return {
-        "year": year, "month": month,
-        "cal": cal, "sess": sess, "km": km, "runKm": runKm,
-        "actKcal": actKcal, "bmi": None, "days": days,
+        "year":        year,
+        "month":       month,
+        "cal":         cal,
+        "sess":        sess,
+        "km":          km,
+        "runKm":       split["runKm"],
+        "cycleKm":     split["cycleKm"],
+        "virtualKm":   split["virtualKm"],
+        "swimKm":      split["swimKm"],
+        "walkKm":      split["walkKm"],
+        "challengeKm": challengeKm,
+        "durationSec": durSec,
+        "goalDay":     goal_day,
+        "actKcal":     actKcal,
+        "bmi":         None,
+        "days":        days,
     }
 
 
@@ -229,8 +261,9 @@ def load_strava_user_data(member: dict[str, Any], range_start: date, range_end: 
         day_flags = [1 if any(a["date"] == d for a in period_acts) else 0 for d in week_dates]
         day_cals  = [sum(a["active_kcal"] for a in period_acts if a["date"] == d) for d in week_dates]
 
-        from garmin.transform import _km, _split_km, _km_by_type
+        from garmin.transform import _km, _split_km, _km_by_type, _challenge_km
         split = _split_km(period_acts)
+        challengeKm = _challenge_km(period_acts)
         week = {
             "calories":     sum(a["calories"]   for a in period_acts),
             "workouts":     len(period_acts),
@@ -297,6 +330,7 @@ def load_strava_user_data(member: dict[str, Any], range_start: date, range_end: 
             "week":         week["week"],
             "weekCalories": week["weekCalories"],
             "kmByType":     week["kmByType"],
+            "challengeKm":  challengeKm,
             "monthly":      monthly,
             "provider":     "strava",
         }
