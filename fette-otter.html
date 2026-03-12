@@ -558,9 +558,9 @@
   .lb-rank.top3 { background: #fdf4ff; color: #9333ea; }
   .lb-user-cell { display: flex; align-items: center; gap: 6px; }
   .lb-avatar-sm {
-    width: 28px; height: 28px; border-radius: 9px;
+    width: 56px; height: 56px; border-radius: 14px;
     display: flex; align-items: center; justify-content: center;
-    font-size: 1.02rem; flex-shrink: 0;
+    font-size: 2rem; flex-shrink: 0;
   }
   .lb-name { font-size: 1.06rem; font-weight: 800; color: var(--text); }
   .lb-device { font-size: 0.84rem; font-weight: 600; color: var(--muted); }
@@ -795,7 +795,7 @@
     .lb-table td { font-size: 0.84rem; padding: 7px 6px; }
     .lb-table th:first-child { min-width: 120px; }
     .lb-name { font-size: 0.88rem; }
-    .lb-avatar-sm { width: 24px; height: 24px; font-size: 0.88rem; border-radius: 7px; }
+    .lb-avatar-sm { width: 44px; height: 44px; font-size: 1.6rem; border-radius: 11px; }
     .lb-rank { width: 18px; height: 18px; font-size: 0.78rem; }
 
     /* Detail callout */
@@ -1879,7 +1879,7 @@ function renderLB(){
       <td>
         <div class="lb-user-cell">
           <span class="lb-rank ${rc}">${i+1}</span>
-          <div class="lb-avatar-sm" style="background:${u.bg}">${u.picture?`<img src="${u.picture}" style="width:100%;height:100%;border-radius:9px;object-fit:cover">`:u.emoji}</div>
+          <div class="lb-avatar-sm" style="background:${u.bg}">${u.picture?`<img src="${u.picture}" style="width:100%;height:100%;border-radius:14px;object-fit:cover">`:u.emoji}</div>
           <div><div class="lb-name">${u.name}${providerBadge}</div></div>
         </div>
       </td>
