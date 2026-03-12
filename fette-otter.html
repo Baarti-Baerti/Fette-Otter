@@ -1795,17 +1795,17 @@ function renderLB(){
   }
 
   const COLS = [
-    { key:'convKm',      label:'Points',         fmt: u => userPointsKm(u).toFixed(1),                         unit:'km' },
-    { key:'km',          label:'Original',        fmt: u => fmtKm((u.runKm||0)+(u.cycleKm||0)+(u.virtualKm||0)+(u.swimKm||0)+(u.walkKm||0)), unit:'km' },
-    { key:'durationSec', label:'⏱ Time',          fmt: u => fmtDuration(userDurationSec(u)),                    unit:'' },
-    { key:'goalDay',     label:'🎯 Days to Goal', fmt: u => { const d=userDaysToGoal(u); return d!=null ? `${d}` : '—'; }, unit:'' },
-    { key:'workouts',    label:'Sessions',        fmt: u => u.workouts||0,                                       unit:'' },
-    { key:'runKm',       label:'🏃 Run',          fmt: u => fmtKm(u.runKm),                                     unit:'km' },
-    { key:'cycleKm',     label:'🚴 Bike',         fmt: u => fmtKm(u.cycleKm),                                   unit:'km' },
-    { key:'virtualKm',   label:'💻 Virtual bike', fmt: u => fmtKm(u.virtualKm),                                 unit:'km' },
-    { key:'swimKm',      label:'🏊 Swim',         fmt: u => fmtKm(u.swimKm),                                    unit:'km' },
-    { key:'walkKm',      label:'🚶 Walk',         fmt: u => fmtKm(u.walkKm),                                    unit:'km' },
-    { key:'actKcal',     label:'Active Calories', fmt: u => ((u.actKcal||0)/1000).toFixed(1)+'K',               unit:'' },
+    { key:'convKm',      label:'Points',       icon:'',   fmt: u => userPointsKm(u).toFixed(1),                                                          unit:'km' },
+    { key:'km',          label:'Original',     icon:'',   fmt: u => fmtKm((u.runKm||0)+(u.cycleKm||0)+(u.virtualKm||0)+(u.swimKm||0)+(u.walkKm||0)),    unit:'km' },
+    { key:'durationSec', label:'Time',         icon:'⏱',  fmt: u => fmtDuration(userDurationSec(u)),                                                      unit:''   },
+    { key:'goalDay',     label:'Days to Goal', icon:'🎯', fmt: u => { const d=userDaysToGoal(u); return d!=null ? `${d}` : '—'; },                        unit:''   },
+    { key:'workouts',    label:'Sessions',     icon:'',   fmt: u => u.workouts||0,                                                                         unit:''   },
+    { key:'runKm',       label:'Run',          icon:'🏃', fmt: u => fmtKm(u.runKm),                                                                       unit:'km' },
+    { key:'cycleKm',     label:'Bike',         icon:'🚴', fmt: u => fmtKm(u.cycleKm),                                                                     unit:'km' },
+    { key:'virtualKm',   label:'Virtual',      icon:'💻', fmt: u => fmtKm(u.virtualKm),                                                                   unit:'km' },
+    { key:'swimKm',      label:'Swim',         icon:'🏊', fmt: u => fmtKm(u.swimKm),                                                                      unit:'km' },
+    { key:'walkKm',      label:'Walk',         icon:'🚶', fmt: u => fmtKm(u.walkKm),                                                                      unit:'km' },
+    { key:'actKcal',     label:'Active Cal',   icon:'🔥', fmt: u => ((u.actKcal||0)/1000).toFixed(1)+'K',                                                 unit:''   },
   ];
   function fmtKm(v){ return (v||0) > 0 ? (v||0).toFixed(1) : '—'; }
 
@@ -1824,13 +1824,11 @@ function renderLB(){
   const thead = `<tr>
     <th style="text-align:left">Athlete</th>
     ${COLS.map(c => {
-      const label = c.key === 'goalDay' && isMultiMonth
-        ? `🎯 Avg Days<br>to Goal`
-        : c.label.replace(' ', '<br>');
-      const unit = c.unit ? ` <span style="font-weight:600;opacity:.6">${c.unit}</span>` : '';
+      const goalLabel = c.key === 'goalDay' && isMultiMonth ? 'Avg Days<br>to Goal' : c.label;
+      const iconLine = c.icon ? `<div style="font-size:1rem;margin-top:2px">${c.icon}</div>` : '';
       const sort = c.key === curMetric ? `<span style="color:var(--violet)">▾</span>` : '';
       return `<th class="${c.key===curMetric?'sort-active':''}" onclick="setMetricKey('${c.key}')" style="text-align:center;white-space:normal;line-height:1.25;${c.key==='convKm'?'background:rgba(129,140,248,0.10);color:var(--violet)':''}">
-        ${label}${unit} ${sort}
+        ${goalLabel} ${sort}${iconLine}
       </th>`;
     }).join('')}
     ${isAdmin ? '<th style="width:36px"></th>' : ''}
@@ -1865,7 +1863,11 @@ function renderLB(){
         if (qualWalkLB > 0.05) parts.push(`🚶 ${(qualWalkLB*3).toFixed(1)}km ÷3 = ${qualWalkLB.toFixed(1)}`);
         title = parts.length ? `title="${parts.join(' | ')}"` : '';
       }
-      return `<td ${title} class="${cls}" style="text-align:center;${c.key==='convKm' ? `background:rgba(129,140,248,0.07);font-weight:800;color:${isZero?'var(--muted)':'var(--violet)'}` : c.key==='goalDay'&&!isZero ? 'color:var(--text)' : isSort&&!isZero?'color:'+u.color:''}">${c.fmt(u)}</td>`;
+      const fmtVal = c.fmt(u);
+      const kmSuffix = c.unit === 'km' && fmtVal !== '—' && !isZero
+        ? `<span style="font-size:0.72rem;color:var(--muted);font-weight:600;margin-left:1px">km</span>`
+        : '';
+      return `<td ${title} class="${cls}" style="text-align:center;${c.key==='convKm' ? `background:rgba(129,140,248,0.07);font-weight:800;color:${isZero?'var(--muted)':'var(--violet)'}` : c.key==='goalDay'&&!isZero ? 'color:var(--text)' : isSort&&!isZero?'color:'+u.color:''}">${fmtVal}${kmSuffix}</td>`;
     }).join('');
     const providerBadge = u.provider === 'strava'
       ? `<span style="font-size:.84rem;background:#fff3e0;color:#c2410c;border-radius:6px;padding:1px 5px;font-weight:800;margin-left:4px">STR</span>`
