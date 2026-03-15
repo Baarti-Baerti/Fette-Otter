@@ -213,14 +213,19 @@ def normalise_activity(act: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def fetch_and_normalise(user_id: int, after: date, before: date | None = None) -> list[dict[str, Any]]:
-    from concurrent.futures import ThreadPoolExecutor, as_completed
-
+def fetch_and_normalise(user_id: int, after: date, before: date | None = None, enrich_calories: bool = True) -> list[dict[str, Any]]:
     raw = fetch_activities(user_id, after, before)
     if not raw:
         return []
 
-    # Fetch detailed calories for each activity in parallel
+    if not enrich_calories:
+        # Fast path — no per-activity detail fetches, calories will be 0
+        return [normalise_activity(a) for a in raw]
+
+    # Slow path — fetch detail for each activity to get calories
+    # Uses parallel requests but capped at 5 workers to stay within Strava's
+    # rate limit of 100 req/15min
+    from concurrent.futures import ThreadPoolExecutor, as_completed
     access_token = get_access_token(user_id)
 
     def _enrich(act: dict[str, Any]) -> dict[str, Any]:
@@ -234,7 +239,7 @@ def fetch_and_normalise(user_id: int, after: date, before: date | None = None) -
         return normalise_activity(act)
 
     results: dict[int, dict] = {}
-    with ThreadPoolExecutor(max_workers=8) as pool:
+    with ThreadPoolExecutor(max_workers=5) as pool:
         futures = {pool.submit(_enrich, a): a["id"] for a in raw}
         for fut in as_completed(futures):
             act_id = futures[fut]
@@ -243,5 +248,4 @@ def fetch_and_normalise(user_id: int, after: date, before: date | None = None) -
             except Exception:
                 pass
 
-    # Preserve original order
     return [results[a["id"]] for a in raw if a["id"] in results]
