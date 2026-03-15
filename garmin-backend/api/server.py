@@ -187,7 +187,7 @@ def load_garmin_user_data(member: dict[str, Any], range_start: date, range_end: 
 
 def _build_month_from_normalised(acts: list[dict], year: int, month: int) -> dict:
     """Like build_month_summary but for already-normalised activity dicts (Strava)."""
-    from garmin.transform import _km, _split_km, _challenge_km, build_month_summary
+    from garmin.transform import _km, _split_km, _challenge_km
     # Reuse build_month_summary by passing already-normalised acts as raw
     # (build_month_summary calls _normalise_activity internally, but since acts
     # are already normalised we wrap them to pass through unchanged)
@@ -250,10 +250,27 @@ def load_strava_user_data(member: dict[str, Any], range_start: date, range_end: 
         return None
     try:
         today = date.today()
-        range_days = (range_end - range_start).days + 1
 
-        # Fetch current period activities (already normalised)
-        period_acts = sv.fetch_and_normalise(uid, range_start, range_end)
+        # Fetch entire YTD without calorie enrichment (fast, no rate limit risk)
+        import calendar as cal_mod
+        ytd_start = date(today.year, 1, 1)
+        _, last_day_cur = cal_mod.monthrange(today.year, today.month)
+        ytd_end = date(today.year, today.month, last_day_cur)
+        all_ytd_acts = sv.fetch_and_normalise(uid, ytd_start, ytd_end, enrich_calories=False)
+
+        # Enrich only current month activities with calories (minimises API calls)
+        cur_month_start = date(today.year, today.month, 1).isoformat()
+        cur_month_end   = ytd_end.isoformat()
+        cur_month_ids   = {a["id"] for a in all_ytd_acts if cur_month_start <= a["date"] <= cur_month_end}
+        if cur_month_ids:
+            enriched_acts = sv.fetch_and_normalise(uid, date(today.year, today.month, 1), ytd_end, enrich_calories=True)
+            enriched_map  = {a["id"]: a for a in enriched_acts}
+            all_ytd_acts  = [enriched_map.get(a["id"], a) for a in all_ytd_acts]
+
+        # Filter to the requested period
+        range_start_iso = range_start.isoformat()
+        range_end_iso   = range_end.isoformat()
+        period_acts = [a for a in all_ytd_acts if range_start_iso <= a["date"] <= range_end_iso]
 
         # Build week flags from last 7 days for the activity dots
         week_start = today - timedelta(days=6)
@@ -275,36 +292,17 @@ def load_strava_user_data(member: dict[str, Any], range_start: date, range_end: 
             **split,
         }
 
-        # Monthly data — Jan through current month of current year (same as Garmin path)
+        # Monthly data — split the already-fetched YTD activities by month
         months_keys: list[tuple[int, int]] = [
             (today.year, mo) for mo in range(1, today.month + 1)
         ]
 
-        def _fetch_month_strava(yr: int, mo: int):
-            import calendar
-            _, last_day = calendar.monthrange(yr, mo)
-            m_start = date(yr, mo, 1)
-            m_end   = date(yr, mo, last_day)
-            acts = sv.fetch_and_normalise(uid, m_start, m_end)
-            return f"{yr}-{mo:02d}", acts
-
         monthly: list[dict] = []
-        monthly_acts: dict[str, list] = {}
-        with ThreadPoolExecutor(max_workers=4) as pool:
-            futures = {pool.submit(_fetch_month_strava, yr, mo): (yr, mo)
-                       for yr, mo in months_keys}
-            for fut in as_completed(futures):
-                yr, mo = futures[fut]
-                try:
-                    key, acts = fut.result()
-                    monthly_acts[key] = acts
-                except Exception as exc:
-                    log.warning("Strava monthly fetch failed %s-%s: %s", yr, mo, exc)
-                    monthly_acts[f"{yr}-{mo:02d}"] = []
-
         for (yr, mo) in months_keys:
-            key  = f"{yr}-{mo:02d}"
-            acts = monthly_acts.get(key, [])
+            _, last_day = cal_mod.monthrange(yr, mo)
+            mo_start = date(yr, mo, 1).isoformat()
+            mo_end   = date(yr, mo, last_day).isoformat()
+            acts = [a for a in all_ytd_acts if mo_start <= a["date"] <= mo_end]
             monthly.append(_build_month_from_normalised(acts, yr, mo))
 
         # Derive activity types
@@ -677,6 +675,26 @@ def debug_strava(user_id: int):
                 results["steps"]["fetch_activity_detail"] = f"FAILED: {exc}"
     except Exception as exc:
         results["steps"]["fetch_activities_30d"] = f"FAILED: {exc}"
+
+    # Step 6: test full load_strava_user_data
+    try:
+        member = g.get_member(user_id)
+        today = date.today()
+        import calendar as cal_mod
+        _, last_day = cal_mod.monthrange(today.year, today.month)
+        payload = load_strava_user_data(member, date(today.year, today.month, 1), date(today.year, today.month, last_day))
+        if payload:
+            results["steps"]["load_strava_user_data"] = "OK"
+            results["payload_keys"] = list(payload.keys())
+            results["actKcal"] = payload.get("actKcal")
+            results["challengeKm"] = payload.get("challengeKm")
+            results["monthly_count"] = len(payload.get("monthly", []))
+        else:
+            results["steps"]["load_strava_user_data"] = "FAILED: returned None"
+    except Exception as exc:
+        import traceback
+        results["steps"]["load_strava_user_data"] = f"FAILED: {exc}"
+        results["load_strava_traceback"] = traceback.format_exc()
 
     return jsonify(results)
 
