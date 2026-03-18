@@ -7,7 +7,7 @@ import sys
 import threading
 import urllib.request
 import urllib.parse
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime, timezone
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 from pathlib import Path
@@ -33,6 +33,10 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(levelname)s %(name)s: %(message)s",
 )
+
+# ── Background refresh state ──────────────────────────────────────────────────
+_refresh_lock        = threading.Lock()
+_refresh_in_progress = {}  # { active, id, started_at, completed, finished_at }
 log = logging.getLogger("squad_stats")
 
 # ── Token bootstrap (cloud deployments) ──────────────────────────────────────
@@ -1014,7 +1018,51 @@ def api_clear_cache():
     return jsonify({"status": "cache cleared, refresh started"})
 
 
-@app.get("/api/cache-status")
+@app.get("/api/team/trigger-refresh")
+def api_trigger_refresh():
+    """
+    Trigger a background refresh for all cached periods without waiting.
+    Returns immediately with a refresh_id the client can poll.
+    Only triggers if no refresh is already in progress.
+    """
+    import uuid
+    with _refresh_lock:
+        if _refresh_in_progress.get("active"):
+            return jsonify({"status": "already_running", "refresh_id": _refresh_in_progress.get("id")})
+        refresh_id = str(uuid.uuid4())[:8]
+        _refresh_in_progress["active"] = True
+        _refresh_in_progress["id"] = refresh_id
+        _refresh_in_progress["started_at"] = datetime.now(timezone.utc).isoformat()
+        _refresh_in_progress["completed"] = False
+
+    def _do_refresh():
+        try:
+            refresh_all_periods(load_team)
+        finally:
+            with _refresh_lock:
+                _refresh_in_progress["active"] = False
+                _refresh_in_progress["completed"] = True
+                _refresh_in_progress["finished_at"] = datetime.now(timezone.utc).isoformat()
+
+    threading.Thread(target=_do_refresh, daemon=True).start()
+    return jsonify({"status": "started", "refresh_id": refresh_id})
+
+
+@app.get("/api/team/refresh-status")
+def api_refresh_status():
+    """Poll this to check if a background refresh has completed."""
+    _, fetched_at = get_cached("thismonth")
+    return jsonify({
+        "active":      _refresh_in_progress.get("active", False),
+        "completed":   _refresh_in_progress.get("completed", False),
+        "refresh_id":  _refresh_in_progress.get("id"),
+        "started_at":  _refresh_in_progress.get("started_at"),
+        "finished_at": _refresh_in_progress.get("finished_at"),
+        "fetched_at":  fetched_at,
+    })
+
+
+
 def api_cache_status():
     """Show cache freshness and recent refresh log."""
     status = {}
@@ -1041,7 +1089,7 @@ def get_user(user_id: int):
 
 
 # ── Start background scheduler (after load_team is defined) ──────────────────
-start_scheduler(load_team)
+# Background scheduler disabled — refreshes triggered by user visits only
 
 
 if __name__ == "__main__":
