@@ -118,59 +118,77 @@ def load_user_data(member: dict[str, Any], range_start: date, range_end: date) -
     return load_garmin_user_data(member, range_start, range_end)
 
 
+def _garmin_retry(fn, max_retries: int = 3, base_delay: float = 10.0):
+    """
+    Call fn(), retrying on 429 rate-limit errors with exponential backoff.
+    Delays: 10s, 20s, 40s between attempts.
+    """
+    import time
+    from requests.exceptions import HTTPError
+    for attempt in range(max_retries):
+        try:
+            return fn()
+        except (GarthHTTPError, Exception) as exc:
+            is_429 = "429" in str(exc) or "Too Many Requests" in str(exc)
+            if is_429 and attempt < max_retries - 1:
+                delay = base_delay * (2 ** attempt)
+                log.warning("Garmin 429 rate limit — waiting %.0fs before retry %d/%d",
+                            delay, attempt + 1, max_retries - 1)
+                time.sleep(delay)
+            else:
+                raise
+
+
 def load_garmin_user_data(member: dict[str, Any], range_start: date, range_end: date) -> dict[str, Any] | None:
     uid = member["id"]
     try:
-        client = g.get_client(uid)
+        client = _garmin_retry(lambda: g.get_client(uid))
     except GarthException as exc:
         log.warning("User %s unauthenticated: %s", uid, exc)
+        return None
+    except Exception as exc:
+        log.warning("User %s get_client failed after retries: %s", uid, exc)
         return None
 
     range_days = (range_end - range_start).days + 1
     today = date.today()
 
     try:
-        week_acts      = g.fetch_activities(client, range_start, range_end)
-        week_summaries = g.fetch_daily_summaries(client, range_start, range_days)
-        # Height: prefer manually stored value in roster, fall back to Garmin profile
-        height_m = member.get("height_m") or g.fetch_user_height(client) or None
-        bmi            = g.fetch_latest_bmi(client, height_m_override=height_m)
-        steps          = g.fetch_steps_range(client, range_start, range_end)
+        week_acts      = _garmin_retry(lambda: g.fetch_activities(client, range_start, range_end))
+        week_summaries = _garmin_retry(lambda: g.fetch_daily_summaries(client, range_start, range_days))
+        height_m       = member.get("height_m") or _garmin_retry(lambda: g.fetch_user_height(client)) or None
+        bmi            = _garmin_retry(lambda: g.fetch_latest_bmi(client, height_m_override=height_m))
+        steps          = _garmin_retry(lambda: g.fetch_steps_range(client, range_start, range_end))
 
         # Fetch and cache profile picture if not already stored
         if not member.get("picture"):
-            pic = g.fetch_profile_picture(client)
-            if pic:
-                g.update_member(uid, {"picture": pic})
-                member = g.get_member(uid)  # refresh
+            try:
+                pic = _garmin_retry(lambda: g.fetch_profile_picture(client))
+                if pic:
+                    g.update_member(uid, {"picture": pic})
+                    member = g.get_member(uid)
+            except Exception:
+                pass
 
-        # Fetch Jan through current month of the current year
+        # Fetch Jan through current month — sequential to avoid hammering Garmin
         months_to_fetch = [(today.year, mo) for mo in range(1, today.month + 1)]
-        # Include last month if range covers it and it's in a prior year (edge case)
         if range_start.year == today.year and range_start.month not in [m for _, m in months_to_fetch]:
             months_to_fetch.insert(0, (range_start.year, range_start.month))
 
         monthly_acts: dict[str, list] = {}
         monthly_bmis: dict[str, Any] = {}
 
-        def _fetch_month(yr, mo):
-            key      = f"{yr}-{mo:02d}"
-            acts     = g.fetch_activities_for_month(client, yr, mo)
-            mo_bmi   = g.fetch_bmi_for_month(client, yr, mo, height_m_override=height_m)
-            return key, acts, mo_bmi if mo_bmi is not None else bmi
-
-        with ThreadPoolExecutor(max_workers=4) as pool:
-            futures = {pool.submit(_fetch_month, yr, mo): (yr, mo)
-                       for yr, mo in months_to_fetch}
-            for fut in as_completed(futures):
-                try:
-                    key, acts, m_bmi = fut.result()
-                    monthly_acts[key] = acts
-                    monthly_bmis[key] = m_bmi
-                except Exception as exc:
-                    yr, mo = futures[fut]
-                    monthly_acts[f"{yr}-{mo:02d}"] = []
-                    monthly_bmis[f"{yr}-{mo:02d}"] = bmi
+        for yr, mo in months_to_fetch:
+            key = f"{yr}-{mo:02d}"
+            try:
+                acts   = _garmin_retry(lambda yr=yr, mo=mo: g.fetch_activities_for_month(client, yr, mo))
+                mo_bmi = _garmin_retry(lambda yr=yr, mo=mo: g.fetch_bmi_for_month(client, yr, mo, height_m_override=height_m))
+                monthly_acts[key] = acts
+                monthly_bmis[key] = mo_bmi if mo_bmi is not None else bmi
+            except Exception as exc:
+                log.warning("Month fetch failed %s for user %s: %s", key, uid, exc)
+                monthly_acts[key] = []
+                monthly_bmis[key] = bmi
 
         return g.build_user_payload(
             roster_entry=member,
@@ -943,28 +961,52 @@ def debug_user(user_id: int):
 def load_team(period: str) -> list[dict]:
     """
     Fetch live data for all members for the given period.
-    Used by both the scheduler and as a cache-miss fallback.
+    Garmin users are fetched sequentially to avoid rate limiting.
+    Strava users are fetched in parallel (different API, different limits).
     """
+    import time
     members = g.all_members()
     if not members:
         return []
     range_start, range_end = _range_dates(period)
-    results = []
-    with ThreadPoolExecutor(max_workers=max(len(members), 1)) as pool:
-        fmap = {pool.submit(load_user_data, m, range_start, range_end): m for m in members}
+
+    garmin_members = [m for m in members if m.get("provider", "garmin") != "strava"]
+    strava_members = [m for m in members if m.get("provider") == "strava"]
+
+    results_map: dict[int, dict] = {}
+
+    # Fetch Garmin users sequentially with a small gap between each
+    for m in garmin_members:
+        try:
+            payload = load_garmin_user_data(m, range_start, range_end)
+        except Exception:
+            payload = None
+        if payload is None:
+            payload = _stub(m)
+        payload["picture"]      = m.get("picture", "")
+        payload["google_email"] = m.get("google_email", "")
+        results_map[m["id"]] = payload
+        time.sleep(1)  # 1s gap between Garmin users
+
+    # Fetch Strava users in parallel
+    with ThreadPoolExecutor(max_workers=len(strava_members) or 1) as pool:
+        fmap = {pool.submit(load_strava_user_data, m, range_start, range_end): m
+                for m in strava_members}
         for fut in as_completed(fmap):
-            member = fmap[fut]
+            m = fmap[fut]
             try:
                 payload = fut.result()
             except Exception:
                 payload = None
             if payload is None:
-                payload = _stub(member)
-            payload["picture"]      = member.get("picture", "")
-            payload["google_email"] = member.get("google_email", "")
-            results.append(payload)
+                payload = _stub(m)
+            payload["picture"]      = m.get("picture", "")
+            payload["google_email"] = m.get("google_email", "")
+            results_map[m["id"]] = payload
+
+    # Restore original member order
     id_order = {m["id"]: i for i, m in enumerate(members)}
-    results.sort(key=lambda u: id_order.get(u["id"], 999))
+    results = sorted(results_map.values(), key=lambda u: id_order.get(u["id"], 999))
     return results
 
 
