@@ -85,7 +85,8 @@ def init_db() -> None:
 
 def get_cached(period: str) -> tuple[list[dict], str | None]:
     """
-    Return (payload_list, fetched_at_iso) from cache, or ([], None) if empty or stale version.
+    Return (payload_list, fetched_at_iso) from cache, or ([], None) if empty.
+    Version mismatch returns the data anyway — better stale than empty.
     """
     try:
         with _connect() as conn:
@@ -93,7 +94,7 @@ def get_cached(period: str) -> tuple[list[dict], str | None]:
                 "SELECT payload, fetched_at, version FROM team_cache WHERE period = ?",
                 (period,)
             ).fetchone()
-        if row and row["version"] == CACHE_VERSION:
+        if row:
             return json.loads(row["payload"]), row["fetched_at"]
     except Exception as exc:
         log.warning("Cache read failed for %s: %s", period, exc)
@@ -118,17 +119,6 @@ def set_cached(period: str, payload: list[dict]) -> None:
         log.info("Cache updated for period=%s (%d users)", period, len(payload))
     except Exception as exc:
         log.error("Cache write failed for %s: %s", period, exc)
-
-
-def clear_cache() -> None:
-    """Delete all cached entries, forcing a fresh fetch on next request."""
-    try:
-        with _connect() as conn:
-            conn.execute("DELETE FROM team_cache")
-            conn.commit()
-        log.info("Cache cleared")
-    except Exception as exc:
-        log.error("Cache clear failed: %s", exc)
 
 
 def cache_age_seconds(fetched_at: str | None) -> float | None:
