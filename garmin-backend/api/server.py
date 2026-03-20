@@ -120,18 +120,30 @@ def load_user_data(member: dict[str, Any], range_start: date, range_end: date) -
 
 def _garmin_retry(fn, max_retries: int = 3, base_delay: float = 10.0):
     """
-    Call fn(), retrying on 429 rate-limit errors with exponential backoff.
-    Delays: 10s, 20s, 40s between attempts.
+    Call fn(), retrying on 429 rate-limit errors.
+    Respects the Retry-After header if present, otherwise uses exponential backoff.
+    Delays: Retry-After value, or 10s → 20s → 40s between attempts.
     """
     import time
-    from requests.exceptions import HTTPError
     for attempt in range(max_retries):
         try:
             return fn()
-        except (GarthHTTPError, Exception) as exc:
+        except Exception as exc:
             is_429 = "429" in str(exc) or "Too Many Requests" in str(exc)
             if is_429 and attempt < max_retries - 1:
-                delay = base_delay * (2 ** attempt)
+                # Try to extract Retry-After from the exception/response
+                retry_after = None
+                try:
+                    # GarthHTTPError and requests HTTPError both expose .response
+                    response = getattr(exc, 'response', None)
+                    if response is not None:
+                        header_val = response.headers.get('Retry-After')
+                        if header_val:
+                            retry_after = float(header_val)
+                            log.info("Garmin Retry-After header: %.0fs", retry_after)
+                except Exception:
+                    pass
+                delay = (retry_after + 10) if retry_after is not None else base_delay * (2 ** attempt)
                 log.warning("Garmin 429 rate limit — waiting %.0fs before retry %d/%d",
                             delay, attempt + 1, max_retries - 1)
                 time.sleep(delay)
