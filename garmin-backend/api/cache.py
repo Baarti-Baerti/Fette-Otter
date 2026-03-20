@@ -152,10 +152,15 @@ def refresh_all_periods(load_team_fn) -> None:
             started = datetime.now(timezone.utc).isoformat()
             try:
                 data = load_team_fn(period)
-                set_cached(period, data)
-                status = "ok"
-                error  = None
-                log.info("Refreshed period=%s — %d users", period, len(data))
+                live_count = sum(1 for u in data if not u.get("_stub"))
+                if live_count > 0:
+                    set_cached(period, data)
+                    status = "ok"
+                    log.info("Refreshed period=%s — %d users (%d live)", period, len(data), live_count)
+                else:
+                    status = "skipped"
+                    log.warning("Refresh period=%s skipped — all users are stubs, keeping existing cache", period)
+                error = None
             except Exception as exc:
                 status = "error"
                 error  = str(exc)
