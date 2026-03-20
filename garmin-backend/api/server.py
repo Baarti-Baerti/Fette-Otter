@@ -1174,6 +1174,7 @@ def api_garmin_status():
 
 
 
+@app.get("/api/admin/cache-inspect")
 def api_cache_inspect():
     """Show raw cache DB contents — row count and fetched_at per period."""
     from api.cache import _connect
@@ -1186,6 +1187,35 @@ def api_cache_inspect():
             "row_count": len(rows),
             "entries": [dict(r) for r in rows],
         })
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
+
+
+@app.get("/api/admin/cache-peek")
+def api_cache_peek():
+    """Peek at each user's data in the cache — shows if stubs or real data, zero API calls."""
+    from api.cache import _connect
+    import json as _json
+    try:
+        with _connect() as conn:
+            row = conn.execute(
+                "SELECT payload FROM team_cache WHERE period = 'thismonth'"
+            ).fetchone()
+        if not row:
+            return jsonify({"error": "no cache for thismonth"})
+        users = _json.loads(row["payload"])
+        summary = []
+        for u in users:
+            summary.append({
+                "name":        u.get("name"),
+                "provider":    u.get("provider", "garmin"),
+                "is_stub":     u.get("_stub", False),
+                "km":          u.get("km", 0),
+                "runKm":       u.get("runKm", 0),
+                "workouts":    u.get("workouts", 0),
+                "challengeKm": u.get("challengeKm", 0),
+            })
+        return jsonify({"users": summary})
     except Exception as exc:
         return jsonify({"error": str(exc)}), 500
 
