@@ -1128,7 +1128,52 @@ def api_refresh_status():
 
 
 
-@app.get("/api/admin/cache-inspect")
+@app.get("/api/garmin-status")
+def api_garmin_status():
+    """
+    Check Garmin status without making any API calls.
+    Reads only from DB cache and token files — safe to call frequently.
+    """
+    from api.cache import _connect
+    members = g.all_members()
+    member_status = []
+    for m in members:
+        uid = m["id"]
+        token_dir = Path(os.environ.get("GARTH_SQUAD_HOME", Path.home() / ".garth_squad")) / str(uid)
+        token_files = [f.name for f in token_dir.iterdir()] if token_dir.exists() else []
+        member_status.append({
+            "id":           uid,
+            "name":         m["name"],
+            "provider":     m.get("provider", "garmin"),
+            "token_exists": token_dir.exists() and len(token_files) > 0,
+            "token_files":  token_files,
+        })
+
+    # Read cache ages from DB without fetching anything
+    cache_info = {}
+    try:
+        with _connect() as conn:
+            rows = conn.execute(
+                "SELECT period, fetched_at, length(payload) as payload_bytes FROM team_cache"
+            ).fetchall()
+        for row in rows:
+            age = cache_age_seconds(row["fetched_at"])
+            cache_info[row["period"]] = {
+                "fetched_at":   row["fetched_at"],
+                "age_minutes":  round(age / 60, 1) if age is not None else None,
+                "payload_bytes": row["payload_bytes"],
+            }
+    except Exception as exc:
+        cache_info = {"error": str(exc)}
+
+    return jsonify({
+        "members":    member_status,
+        "cache":      cache_info,
+        "tip":        "This endpoint makes zero Garmin/Strava API calls — safe to poll freely.",
+    })
+
+
+
 def api_cache_inspect():
     """Show raw cache DB contents — row count and fetched_at per period."""
     from api.cache import _connect
