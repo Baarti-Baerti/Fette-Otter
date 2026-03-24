@@ -291,6 +291,9 @@
         <span class="loading"><span class="spin">⟳</span> loading</span>
       </div>
       <div class="card-sub" id="garminStatusSub"></div>
+      <div id="garminPausedTimer" style="font-size:0.8rem;color:var(--yellow);margin-top:8px;font-weight:700;display:none">
+        ⏱ Paused for: <span id="pausedDuration">—</span>
+      </div>
     </div>
 
     <div class="card" style="--accent: var(--blue)">
@@ -467,6 +470,35 @@ async function loadAll() {
   document.getElementById('headerStatus').textContent = 'Live';
 }
 
+let _pausedSince = null;
+let _pauseTimerInterval = null;
+
+function startPauseTimer(since) {
+  _pausedSince = since ? new Date(since) : null;
+  if (_pauseTimerInterval) clearInterval(_pauseTimerInterval);
+  if (!_pausedSince) {
+    document.getElementById('garminPausedTimer').style.display = 'none';
+    return;
+  }
+  document.getElementById('garminPausedTimer').style.display = 'block';
+  function update() {
+    if (!_pausedSince) return;
+    const secs = Math.round((Date.now() - _pausedSince.getTime()) / 1000);
+    document.getElementById('pausedDuration').textContent = fmtDuration(secs);
+  }
+  update();
+  _pauseTimerInterval = setInterval(update, 1000);
+}
+
+function fmtDuration(secs) {
+  const h = Math.floor(secs / 3600);
+  const m = Math.floor((secs % 3600) / 60);
+  const s = secs % 60;
+  if (h > 0) return `${h}h ${m}m ${s}s`;
+  if (m > 0) return `${m}m ${s}s`;
+  return `${s}s`;
+}
+
 async function loadGarminStatus() {
   try {
     const data = await api('/api/admin/garmin-paused');
@@ -478,6 +510,7 @@ async function loadGarminStatus() {
     document.getElementById('garminStatusSub').textContent = paused
       ? 'API calls blocked — cached data only'
       : 'API calls enabled — live fetching on';
+    startPauseTimer(paused ? data.paused_since : null);
   } catch(e) {
     document.getElementById('garminStatusVal').innerHTML = `<span class="pill red">ERROR</span>`;
   }
@@ -675,7 +708,6 @@ async function testGarminDebug() {
   }
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
 function fmtAge(secs) {
   if (secs < 60) return `${secs}s ago`;
   if (secs < 3600) return `${Math.round(secs / 60)}m ago`;
