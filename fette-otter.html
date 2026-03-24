@@ -1689,10 +1689,19 @@ async function loadData(period = 'thismonth') {
     applyData(entry ? entry.data : [], period, true);
 
     // Only trigger background refresh if data is older than 30 minutes
+    // and Garmin is not paused (to avoid hammering a rate-limited API)
     const cacheTs = _refreshStartFetchedAt ? new Date(_refreshStartFetchedAt).getTime() : 0;
     const dataAgeMs = Date.now() - cacheTs;
     if (dataAgeMs > 30 * 60 * 1000) {
-      _triggerBackgroundRefresh(_refreshStartFetchedAt);
+      try {
+        const pauseCheck = await fetch(`${API_BASE}/api/admin/garmin-paused`);
+        const pauseData = await pauseCheck.json();
+        if (!pauseData.garmin_paused) {
+          _triggerBackgroundRefresh(_refreshStartFetchedAt);
+        }
+      } catch(e) {
+        // If check fails, don't trigger refresh to be safe
+      }
     }
 
   } catch(e) {
