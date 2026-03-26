@@ -2824,11 +2824,17 @@ function chooseProvider(provider) {
       currentMember?.provider !== 'strava' ? 'Join Fette Otter 🦦' : 'Connect Garmin';
     goToStep(1);
   } else {
-    // Strava — redirect to backend OAuth
-    goToStep(2);
+    // Strava — show direct link (window.location.href can be blocked by browsers from modal)
     const params = new URLSearchParams({ name });
     if (currentMember?.id) params.set('user_id', currentMember.id);
-    window.location.href = `${API_BASE}/api/strava/auth?${params}`;
+    const stravaUrl = `${API_BASE}/api/strava/auth?${params}`;
+    document.getElementById('step2').innerHTML = `
+      <div style="font-size:2.5rem;margin-bottom:12px">🟠</div>
+      <p style="font-weight:800;font-size:1.06rem;margin-bottom:8px">One more step!</p>
+      <p style="font-size:.93rem;color:var(--muted);margin-bottom:20px;line-height:1.5">Click the button below to authorise with Strava and complete your registration.</p>
+      <a href="${stravaUrl}" style="display:inline-block;background:#fc4c02;color:#fff;font-weight:800;padding:14px 32px;border-radius:12px;text-decoration:none;font-size:1.06rem;box-shadow:0 4px 14px rgba(252,76,2,0.3)">🟠 Connect with Strava</a>
+    `;
+    goToStep(2);
   }
 }
 
