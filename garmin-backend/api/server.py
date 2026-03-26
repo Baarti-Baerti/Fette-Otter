@@ -408,24 +408,38 @@ def strava_callback():
     picture    = athlete.get("profile_medium") or athlete.get("profile") or ""
     google_sub = f"strava_{strava_id}"
 
-    # Upsert member
+    # 1. Check if already registered via Strava (same Strava account)
     existing = g.get_by_google_sub(google_sub)
     if existing:
         member = existing
-        # Update name/picture if provided
+        g.update_member(member["id"], {"provider": "strava", "picture": picture or member.get("picture","")})
         if name and name != member.get("name"):
             g.update_member(member["id"], {"name": name})
     else:
-        member = g.add_member(
-            google_sub=google_sub,
-            google_email=f"{strava_id}@strava",
-            name=full_name,
-            picture=picture,
-            garmin_email="",
-            role="Fette Otter",
-        )
-        # Mark as Strava provider
-        g.update_member(member["id"], {"provider": "strava", "picture": picture})
+        # 2. Check if a member with the same name already exists (Garmin user converting to Strava)
+        all_m = g.all_members()
+        name_match = next((m for m in all_m if m.get("name", "").lower() == full_name.lower()), None)
+        if name_match:
+            # Convert existing member to Strava
+            member = name_match
+            g.update_member(member["id"], {
+                "provider":   "strava",
+                "google_sub": google_sub,
+                "google_email": f"{strava_id}@strava",
+                "picture":    picture or member.get("picture", ""),
+            })
+            log.info("Converted existing member %s (id=%s) from Garmin to Strava", full_name, member["id"])
+        else:
+            # 3. Brand new member
+            member = g.add_member(
+                google_sub=google_sub,
+                google_email=f"{strava_id}@strava",
+                name=full_name,
+                picture=picture,
+                garmin_email="",
+                role="Fette Otter",
+            )
+            g.update_member(member["id"], {"provider": "strava", "picture": picture})
 
     sv.save_token(member["id"], token)
     log.info("Strava member %s (id=%s) authenticated", full_name, member["id"])
@@ -1028,6 +1042,44 @@ def api_clear_cache():
         return jsonify({"error": str(exc)}), 500
     threading.Thread(target=refresh_all_periods, args=(load_team,), daemon=True).start()
     return jsonify({"status": "cache cleared, refresh started"})
+
+
+@app.get("/api/admin/nuke-members")
+def api_nuke_members():
+    """
+    DANGER: Delete all members and their tokens. Wipes members.json and all
+    token dirs. Use only to start completely fresh.
+    """
+    import shutil
+    squad_home = Path(os.environ.get("GARTH_SQUAD_HOME", Path.home() / ".garth_squad"))
+    destroyed = []
+
+    # Delete each user token directory
+    members = g.all_members()
+    for m in members:
+        udir = squad_home / str(m["id"])
+        if udir.exists():
+            shutil.rmtree(str(udir))
+            destroyed.append(f"tokens/{m['id']}")
+
+    # Delete members.json
+    mf = squad_home / "members.json"
+    if mf.exists():
+        mf.unlink()
+        destroyed.append("members.json")
+
+    # Clear cache too
+    from api.cache import _connect
+    try:
+        with _connect() as conn:
+            conn.execute("DELETE FROM team_cache")
+            conn.commit()
+        destroyed.append("team_cache")
+    except Exception:
+        pass
+
+    log.info("NUKE: destroyed %s", destroyed)
+    return jsonify({"status": "all members and tokens deleted", "destroyed": destroyed})
 
 
 @app.get("/api/admin/force-cache")
