@@ -1100,19 +1100,55 @@ def api_garmin_paused():
     return jsonify({"garmin_paused": paused, "paused_since": since})
 
 
-@app.get("/api/admin/force-cache")
-def api_force_cache():
-    """Force a synchronous team fetch and write to cache — bypasses all guards."""
-    results = {}
-    for period in CACHED_PERIODS:
-        try:
-            data = load_team(period)
-            set_cached(period, data)
-            live = sum(1 for u in data if not u.get("_stub"))
-            results[period] = {"users": len(data), "live": live, "status": "ok"}
-        except Exception as exc:
-            results[period] = {"status": "error", "error": str(exc)}
-    return jsonify(results)
+@app.post("/api/admin/restore-members")
+def api_restore_members():
+    """
+    Restore members.json from a provided JSON body.
+    POST { "members": [...], "secret": "fette-otter-restore" }
+    """
+    body = request.get_json(silent=True) or {}
+    if body.get("secret") != "fette-otter-restore":
+        return jsonify({"error": "Forbidden"}), 403
+    members = body.get("members")
+    if not members or not isinstance(members, list):
+        return jsonify({"error": "members array required"}), 400
+    import json as _json
+    squad_home = Path(os.environ.get("GARTH_SQUAD_HOME", Path.home() / ".garth_squad"))
+    squad_home.mkdir(parents=True, exist_ok=True)
+    members_file = squad_home / "members.json"
+    members_file.write_text(_json.dumps(members, indent=2))
+    log.info("members.json restored with %d members", len(members))
+    return jsonify({"status": "ok", "members_restored": len(members)})
+
+
+@app.get("/api/admin/seed-members")
+def api_seed_members():
+    """
+    Restore the original 5 members to members.json.
+    Only runs if members.json is empty — will not overwrite existing members.
+    """
+    existing = g.all_members()
+    if existing:
+        return jsonify({"status": "skipped", "reason": "members already exist", "count": len(existing)})
+
+    import os
+    squad_home = Path(os.environ.get("GARTH_SQUAD_HOME", Path.home() / ".garth_squad"))
+    members_file = squad_home / "members.json"
+
+    seed = [
+        {"id":1,"name":"Martin", "role":"admin","emoji":"🦁","color":"#7c3aed","bg":"#ede9fe","provider":"garmin","garminDevice":"Garmin","types":[],"picture":"","google_email":""},
+        {"id":2,"name":"Okonski","role":"Brew Crew","emoji":"🐯","color":"#db2777","bg":"#fce7f3","provider":"garmin","garminDevice":"Garmin","types":[],"picture":"","google_email":""},
+        {"id":3,"name":"Alex",   "role":"Brew Crew","emoji":"🦊","color":"#0284c7","bg":"#e0f2fe","provider":"garmin","garminDevice":"Garmin","types":[],"picture":"","google_email":""},
+        {"id":4,"name":"Marc",   "role":"Brew Crew","emoji":"🐺","color":"#b45309","bg":"#fef3c7","provider":"strava","garminDevice":"","types":[],"picture":"","google_email":""},
+        {"id":5,"name":"Jan",    "role":"Brew Crew","emoji":"🦅","color":"#059669","bg":"#d1fae5","provider":"garmin","garminDevice":"Garmin","types":[],"picture":"","google_email":""},
+    ]
+
+    import json as _json
+    squad_home.mkdir(parents=True, exist_ok=True)
+    with open(members_file, "w") as f:
+        _json.dump(seed, f, indent=2)
+    log.info("Members seeded via /api/admin/seed-members")
+    return jsonify({"status": "seeded", "count": len(seed), "members": [m["name"] for m in seed]})
 
 
 @app.get("/api/admin/force-cache")
