@@ -189,11 +189,6 @@ def fetch_activities(user_id: int, after: date, before: date | None = None) -> l
     return activities
 
 
-def fetch_activity_detail(activity_id: int, access_token: str) -> dict[str, Any]:
-    """Fetch a single activity by ID — includes calories field."""
-    return _get(f"/activities/{activity_id}", access_token)
-
-
 # ── Normalise to the same shape as garmin._normalise_activity ────────────────
 
 def normalise_activity(act: dict[str, Any]) -> dict[str, Any]:
@@ -207,24 +202,26 @@ def normalise_activity(act: dict[str, Any]) -> dict[str, Any]:
         "type":        mapped,
         "date":        start,
         "calories":    int(act.get("calories") or 0),
-        "active_kcal": int(act.get("calories") or 0),
+        "active_kcal": int(act.get("calories") or 0),   # Strava only has total calories
         "distance_m":  float(act.get("distance") or 0),
         "duration_s":  float(act.get("moving_time") or 0),
     }
 
 
-def fetch_and_normalise(user_id: int, after: date, before: date | None = None, enrich_calories: bool = True) -> list[dict[str, Any]]:
+def fetch_activity_detail(activity_id: int, access_token: str) -> dict[str, Any]:
+    """Fetch a single activity by ID — includes calories field."""
+    return _get(f"/activities/{activity_id}", access_token)
+
+
+def fetch_and_normalise(user_id: int, after: date, before: date | None = None, enrich_calories: bool = False) -> list[dict[str, Any]]:
     raw = fetch_activities(user_id, after, before)
     if not raw:
         return []
 
     if not enrich_calories:
-        # Fast path — no per-activity detail fetches, calories will be 0
         return [normalise_activity(a) for a in raw]
 
-    # Slow path — fetch detail for each activity to get calories
-    # Uses parallel requests but capped at 5 workers to stay within Strava's
-    # rate limit of 100 req/15min
+    # Fetch detail for each activity to get calories, capped at 5 workers
     from concurrent.futures import ThreadPoolExecutor, as_completed
     access_token = get_access_token(user_id)
 
@@ -232,7 +229,6 @@ def fetch_and_normalise(user_id: int, after: date, before: date | None = None, e
         try:
             detail = fetch_activity_detail(act["id"], access_token)
             cal = int(detail.get("calories") or 0)
-            log.debug("Activity %s (%s): calories=%s", act["id"], act.get("name"), cal)
             act = {**act, "calories": cal}
         except Exception as e:
             log.warning("Failed to fetch detail for activity %s: %s", act["id"], e)
